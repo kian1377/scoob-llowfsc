@@ -10,7 +10,7 @@ from IPython.display import display, clear_output
 import matplotlib.pyplot as plt
 
 # def take_measurement(system_interface, probe_cube, probe_amplitude, return_all=False, pca_modes=None):
-def take_measurement(I, probe_cube, probe_amplitude, pca_modes=None, plot=False):
+def measure_probes(I, probe_cube, probe_amplitude, pca_modes=None, plot=False):
     N_probes = len(probe_cube)
     
     diff_ims = []
@@ -72,7 +72,7 @@ def calibrate(
             I.add_dm(s * calib_amp * dm_mode)
             
             # Compute reponse with difference images of probes
-            diff_ims = take_measurement(I, probe_modes, probe_amplitude)
+            diff_ims = measure_probes(I, probe_modes, probe_amplitude)
             calib_amps.append(calib_amp)
             response += s * diff_ims.reshape(Nprobes, I.npsf**2) / (2 * calib_amp)
             
@@ -135,7 +135,7 @@ def run(I,
     for i in range(num_iterations):
         print(f"\tClosed-loop iteration {i+starting_itr} / {num_iterations+starting_itr-1}")
         I.subtract_dark = False
-        diff_ims = take_measurement(I, probe_modes, probe_amplitude, plot=plot_probes)
+        diff_ims = measure_probes(I, probe_modes, probe_amplitude, plot=plot_probes)
         measurement_vector = diff_ims[:, control_mask].ravel()
 
         modal_coeff = -control_matrix.dot(measurement_vector)

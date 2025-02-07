@@ -20,7 +20,7 @@ dm_llowfsc_path = Path('/opt/MagAOX/telem/dm00disp01/')
 dm_howfsc_path = Path('/opt/MagAOX/telem/dm00disp02/')
 dm_wfe_path = Path('/opt/MagAOX/telem/dm00disp03/')
 
-def toggle_telem(on, channel, client):
+def toggle(on, channel, client):
     client.wait_for_properties([f'telem_{channel}.writing'])
     if on:
         client[f'telem_{channel}.writing.toggle'] = purepyindi.SwitchState.ON

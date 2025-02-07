@@ -12,7 +12,7 @@ import matplotlib.pyplot as plt
 from matplotlib.colors import LogNorm, Normalize
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 
-def inject_wfe(wfe_time_series, wfe_modes, freq, wfe_channel, offset=75e-6):
+def inject_wfe(wfe_time_series, wfe_modes, freq, wfe_stream, offset=75e-6):
     Nsamps = wfe_time_series.shape[1]
     tsleep = 1/freq - offset
     try:
@@ -21,12 +21,12 @@ def inject_wfe(wfe_time_series, wfe_modes, freq, wfe_channel, offset=75e-6):
         while i<Nsamps+1:
             if i==Nsamps: i = 0
             wfe = np.sum( wfe_time_series[:, i, None, None] * wfe_modes, axis=0)
-            wfe_channel.write(1e6 * wfe)
+            wfe_stream.write(1e6 * wfe)
             time.sleep(tsleep)
             i += 1
     except KeyboardInterrupt:
         print('Stopped injecting WFE.')
-        wfe_channel.write(np.zeros(wfe_channel.shape))
+        wfe_stream.write(np.zeros(wfe_stream.shape))
 
 def calibrate_without_fsm(I, control_mask, dm_modes, amps=5e-9, plot=False):
     # time.sleep(2)

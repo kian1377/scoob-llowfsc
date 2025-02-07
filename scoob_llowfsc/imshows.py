@@ -1,5 +1,5 @@
 from .math_module import xp, xcipy, ensure_np_array
-import scoob_llowfsc.utils as utils
+from scoob_llowfsc import utils
 
 import numpy as np
 import scipy
@@ -294,4 +294,63 @@ def imshow3(
     
     if display_fig: display(fig)
     if return_fig: return fig,ax
+
+def plot_data_with_ref(
+        data, 
+        im1vmin=1e-9, im1vmax=1e-4,
+        im2vmin=1e-9, im2vmax=1e-4, 
+        vmin=1e-9, vmax=1e-4, 
+        xticks=None,
+        exp_name='',
+        fname=None,
+    ):
+    ims = ensure_np_array( xp.array(data['images']) ) 
+    control_mask = ensure_np_array( data['control_mask'] )
+    # print(type(control_mask))
+    Nitr = ims.shape[0]
+    npsf = ims.shape[1]
+    psf_pixelscale_lamD = data['pixelscale']
+
+    mean_nis = np.mean(ims[:,control_mask], axis=1)
+    ibest = np.argmin(mean_nis)
+    ref_im = ensure_np_array(data['images'][0])
+    best_im = ensure_np_array(data['images'][ibest])
+
+    fig,ax = plt.subplots(nrows=1, ncols=3, figsize=(15,10), dpi=125, gridspec_kw={'width_ratios': [1, 1, 1], })
+    ext = psf_pixelscale_lamD*npsf/2
+    extent = [-ext, ext, -ext, ext]
+
+    w = 0.225
+    im1 = ax[0].imshow(ref_im, norm=LogNorm(vmax=im1vmax, vmin=im1vmin), cmap='magma', extent=extent)
+    ax[0].set_title(f'Initial Image:\nMean Contrast = {mean_nis[0]:.2e}', fontsize=14)
+    divider = make_axes_locatable(ax[0])
+    cax = divider.append_axes("right", size="4%", pad=0.075)
+    cbar = fig.colorbar(im1, cax=cax)
+    cbar.ax.set_ylabel('NI', rotation=0, labelpad=7)
+    ax[0].set_position([0, 0, w, w]) # [left, bottom, width, height]
+
+    im2 = ax[1].imshow( best_im, norm=LogNorm(vmax=im2vmax, vmin=im2vmin), cmap='magma', extent=extent)
+    ax[1].set_title('Best Iteration' + exp_name + f':\nMean Contrast = {mean_nis[ibest]:.2e}', fontsize=14)
+    divider = make_axes_locatable(ax[1])
+    cax = divider.append_axes("right", size="4%", pad=0.075)
+    cbar = fig.colorbar(im2, cax=cax,)
+    cbar.ax.set_ylabel('NI', rotation=0, labelpad=7)
+    ax[1].set_position([0.23, 0, w, w])
+
+    ax[0].set_ylabel('Y [$\lambda/D$]', fontsize=12, labelpad=-5)
+    ax[0].set_xlabel('X [$\lambda/D$]', fontsize=12, labelpad=5)
+    ax[1].set_xlabel('X [$\lambda/D$]', fontsize=12, labelpad=5)
+
+    ax[2].set_title('Mean Contrast per Iteration' + exp_name, fontsize=14)
+    ax[2].semilogy(mean_nis, label='3.6% Bandpass')
+    ax[2].grid()
+    ax[2].set_xlabel('Iteration Number', fontsize=12, )
+    ax[2].set_ylabel('Mean Contrast', fontsize=14, labelpad=1)
+    ax[2].set_ylim([vmin, vmax])
+    xticks = np.arange(0,Nitr,2) if xticks is None else xticks
+    ax[2].set_xticks(xticks)
+    ax[2].set_position([0.525, 0, 0.3, w])
+
+    if fname is not None: fig.savefig(fname, format='pdf', bbox_inches="tight")
+    
     

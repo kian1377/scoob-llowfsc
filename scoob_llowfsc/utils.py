@@ -1,5 +1,4 @@
 from .math_module import xp, xcipy, ensure_np_array
-from scoob_llowfsc.imshows import imshow1, imshow2, imshow3
 
 import numpy as np
 import scipy
@@ -14,6 +13,13 @@ from mpl_toolkits.axes_grid1 import make_axes_locatable
 from matplotlib.patches import Circle, Rectangle
 from IPython.display import display, clear_output
 
+def mean(array, mask=None):
+    MEAN = xp.mean(array) if mask is None else xp.mean(array[mask])
+    return MEAN
+
+def rms(array, mask=None):
+    RMS = xp.sqrt( xp.mean( xp.square(array))) if mask is None else xp.sqrt( xp.mean( xp.square(array[mask])))
+    return RMS
 
 def make_grid(npix, pixelscale=1, half_shift=False):
     if half_shift:
@@ -58,7 +64,6 @@ def load_fits(fpath, header=False):
     else:
         return data
 
-# functions for saving python objects
 def save_pickle(fpath, data, quiet=False):
     out = open(str(fpath), 'wb')
     pickle.dump(data, out)
@@ -71,13 +76,7 @@ def load_pickle(fpath):
     infile.close()
     return pkl_data  
 
-def rms(data, mask=None):
-    if mask is None:
-        return xp.sqrt(xp.mean(xp.square(data)))
-    else:
-        return xp.sqrt(xp.mean(xp.square(data[mask])))
-
-def rotate_arr(arr, rotation, reshape=False, order=1):
+def rotate_arr(arr, rotation, reshape=False, order=3):
     if arr.dtype == complex:
         arr_r = xcipy.ndimage.rotate(xp.real(arr), angle=rotation, reshape=reshape, order=order)
         arr_i = xcipy.ndimage.rotate(xp.imag(arr), angle=rotation, reshape=reshape, order=order)
@@ -154,7 +153,7 @@ def beta_reg(S, beta=-1):
     rho = xp.diag(sts)
     alpha2 = rho.max()
 
-    control_matrix = xp.matmul( xp.linalg.inv( sts + alpha2*10.0**(beta)*xp.eye(sts.shape[0]) ), S.T)
+    control_matrix = xp.matmul( xp.linalg.inv( sts + alpha2*10.0**(beta) * xp.eye(sts.shape[0]) ), S.T)
     return control_matrix
 
 def create_circ_mask(h, w, center=None, radius=None):
@@ -171,12 +170,15 @@ def create_circ_mask(h, w, center=None, radius=None):
     return mask
 
 # Creating focal plane masks
-def create_annular_focal_plane_mask(npsf, psf_pixelscale, 
-                                    irad, orad,  
-                                    edge=None,
-                                    shift=(0,0), 
-                                    rotation=0,
-                                    plot=False):
+def create_annular_focal_plane_mask(
+        npsf, 
+        psf_pixelscale, 
+        irad, 
+        orad,  
+        edge=None,
+        rotation=0,
+        plot=False,
+    ):
     x = (xp.linspace(-npsf/2, npsf/2-1, npsf) + 1/2)*psf_pixelscale
     x,y = xp.meshgrid(x,x)
     r = xp.hypot(x, y)
@@ -184,16 +186,8 @@ def create_annular_focal_plane_mask(npsf, psf_pixelscale,
     if edge is not None: mask *= (x > edge)
     
     mask = xcipy.ndimage.rotate(mask, rotation, reshape=False, order=0)
-    mask = xcipy.ndimage.shift(mask, (shift[1], shift[0]), order=0)
-    
-    if plot:
-        imshow1(mask)
         
     return mask
-
-def rms(image, mask=None):
-
-    return np.sqrt(np.mean(image[mask]**2))
 
 def create_hadamard_modes(dm_mask): 
     Nacts = dm_mask.sum().astype(int)
@@ -219,7 +213,6 @@ def create_fourier_modes(
         fourier_sampling=0.75,
         which='both', 
         return_fs=False,
-        plot=False,
     ):
     Nact = dm_mask.shape[0]
     nfg = int(xp.round(npsf * psf_pixelscale_lamD/fourier_sampling))
@@ -229,8 +222,7 @@ def create_fourier_modes(
     ypp, xpp = (xp.indices((Nact, Nact)) - Nact//2 + 1/2)
 
     sampled_fs = xp.array([xf[fourier_cm], yf[fourier_cm]]).T
-    if plot: imshow1(fourier_cm, pxscl=fourier_sampling, grid=True)
-    
+
     fourier_modes = []
     for i in range(len(sampled_fs)):
         fx = sampled_fs[i,0]
@@ -251,7 +243,6 @@ def create_fourier_probes(
         fourier_sampling=0.75, 
         shifts=None, nprobes=2,
         use_weighting=False, 
-        plot=False,
     ): 
     Nact = dm_mask.shape[0]
 
@@ -296,10 +287,6 @@ def create_fourier_probes(
         probe = cos_weights[i]*sum_cos + sin_weights[i]*sum_sin
         probe = xcipy.ndimage.shift(probe, (shifts[i][1], shifts[i][0]))
         probes[i] = probe/xp.max(probe)
-
-        if plot: 
-            probe_response = xp.abs(xp.fft.fftshift(xp.fft.fft2(xp.fft.ifftshift(pad_or_crop(probes[i], 4*Nact)))))
-            imshow2(probes[i], probe_response, cmap1='viridis', pxscl2=1/4)
 
     return probes
     

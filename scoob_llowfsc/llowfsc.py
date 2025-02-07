@@ -1,4 +1,4 @@
-from .math_module import xp, _scipy, ensure_np_array
+from .math_module import xp, xcipy, ensure_np_array
 import scoob_llowfsc.utils as utils
 from scoob_llowfsc.imshows import imshow1, imshow2, imshow3
 
@@ -12,92 +12,9 @@ import matplotlib.pyplot as plt
 from matplotlib.colors import LogNorm, Normalize
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 
-def record_chop_ims(I, mode, amp, Nchops, plot=False):
-    chops = xp.zeros((3*Nchops, I.nlocam, I.nlocam))
-    for i in range(Nchops):
-        # First image at the 0 point
-        zero_im = I.snap_locam()
-
-        # Second image at the positive chop
-        I.add_dm(amp*mode)
-        pos_im = I.snap_locam()
-        I.add_dm(-amp*mode)
-
-        # Fourth image at negative chop
-        I.add_dm(-amp*mode)
-        neg_im = I.snap_locam()
-        I.add_dm(amp*mode)
-
-        if plot:
-            imshow3(zero_im, pos_im, neg_im)
-
-        chops[3*i] = zero_im
-        chops[3*i+1] = pos_im
-        chops[3*i+2] = neg_im
-
-    return chops
-
-def make_shear_chops(ref_locam_im, shear_pix=1, plot=False):
-    nlocam = ref_locam_im.shape[0]
-    shear_chops = xp.zeros((2, nlocam, nlocam))
-    shear_chops[0] = ( _scipy.ndimage.shift(ref_locam_im, (0,shear_pix), order=5) - ref_locam_im ) / shear_pix
-    shear_chops[1] = ( _scipy.ndimage.shift(ref_locam_im, (shear_pix,0), order=5) - ref_locam_im ) / shear_pix
-    if plot: imshow2(shear_chops[0], shear_chops[1])
-    return shear_chops
-
-def make_response_matrix(zernike_chops, control_mask, flux_mode=None, shear_chops=None,):
-    """_summary_
-
-    Parameters
-    ----------
-    zernike_chop_ims : np.ndarray
-        Data cube containing the difference images for each zernike mode
-    control_mask : _type_
-        _description_
-    flux_mode : _type_, optional
-        _description_, by default None
-    shear_chops : _type_, optional
-        _description_, by default None
-
-    Returns
-    -------
-    _type_
-        _description_
-    """
-
-    Nmask = int(control_mask.sum())
-    Nz_modes = zernike_chops.shape[0]
-    Nmodes = Nz_modes + 2
-    if shear_chops is None:
-        shear_chop = xp.zeros_like(zernike_chops[0])
-        shear_chops = xp.array([shear_chop, shear_chop])
-    # if flux_mode is None:
-    #     flux_mode = np.zeros_like(zernike_chops[0])
-    
-    response_matrix = xp.zeros((Nmask, Nmodes))
-    for i in range(Nz_modes):
-        response_matrix[:,i] = zernike_chops[i][control_mask]
-    response_matrix[:,-2] = shear_chops[0][control_mask]
-    response_matrix[:,-1] = shear_chops[1][control_mask]
-    # response_matrix[:,-1] = flux_mode[control_mask]
-
-    return response_matrix
-
-def reconstruct(locam_im, control_matrix, ref_im, verbose=False):
-
-    del_im = locam_im - ref_im
-    coeff = control_matrix.dot(del_im)
-
-    return coeff
-
-def update_locam_delta(response_matrix, modal_matrix, control_mask, dh_channel, locam_delta_channel,):
-    del_ref_im = np.zeros(locam_delta_channel.shape)
-    del_ref_im[control_mask] = response_matrix.dot(modal_matrix.dot(1e-6*dh_channel.grab_latest().ravel())/1024)
-    locam_delta_channel.write(del_ref_im)
-    return
-
-def inject_wfe(wfe_time_series, wfe_modes, freq, wfe_channel):
+def inject_wfe(wfe_time_series, wfe_modes, freq, wfe_channel, offset=75e-6):
     Nsamps = wfe_time_series.shape[1]
+    tsleep = 1/freq - offset
     try:
         print('Injecting WFE ...')
         i = 0
@@ -105,9 +22,8 @@ def inject_wfe(wfe_time_series, wfe_modes, freq, wfe_channel):
             if i==Nsamps: i = 0
             wfe = np.sum( wfe_time_series[:, i, None, None] * wfe_modes, axis=0)
             wfe_channel.write(1e6 * wfe)
-            time.sleep(1/freq)
+            time.sleep(tsleep)
             i += 1
-
     except KeyboardInterrupt:
         print('Stopped injecting WFE.')
         wfe_channel.write(np.zeros(wfe_channel.shape))
@@ -147,6 +63,12 @@ def calibrate_without_fsm(I, control_mask, dm_modes, amps=5e-9, plot=False):
     response_matrix = responses.T
 
     return response_matrix
+
+def update_locam_delta(response_matrix, modal_matrix, control_mask, dh_channel, locam_delta_channel,):
+    del_ref_im = np.zeros(locam_delta_channel.shape)
+    del_ref_im[control_mask] = response_matrix.dot(modal_matrix.dot(1e-6*dh_channel.grab_latest().ravel())/1024)
+    locam_delta_channel.write(del_ref_im)
+    return
 
 def single_iteration(
     I,

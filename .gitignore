@@ -5,5 +5,5 @@ dist/*
 
 scoob_llowfsc.egg-info
 
-data/
+data*/
 

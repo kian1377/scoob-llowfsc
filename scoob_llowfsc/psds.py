@@ -1,4 +1,4 @@
-from .math_module import xp, _scipy, ensure_np_array
+from .math_module import xp, xcipy, ensure_np_array
 
 import numpy as np
 import scipy

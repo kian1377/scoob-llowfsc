@@ -1,4 +1,4 @@
-from .math_module import xp, _scipy, ensure_np_array
+from .math_module import xp, xcipy, ensure_np_array
 import scoob_llowfsc.utils as utils
 from scoob_llowfsc.imshows import imshow1, imshow2, imshow3
 

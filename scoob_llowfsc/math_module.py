@@ -38,7 +38,7 @@ class scipy_backend:
         return getattr(self._srcmodule, key)
     
 xp = np_backend(cupy) if cupy_avail else np_backend(np)
-_scipy = scipy_backend(cupyx.scipy) if cupy_avail else scipy_backend(scipy)
+xcipy = scipy_backend(cupyx.scipy) if cupy_avail else scipy_backend(scipy)
 
 def update_np(module):
     """_summary_
@@ -58,15 +58,13 @@ def update_scipy(module):
     module : _type_
         _description_
     """
-    _scipy._srcmodule = module
+    xcipy._srcmodule = module
         
 def ensure_np_array(arr):
     if isinstance(arr, np.ndarray):
         return arr
     elif cupy_avail and isinstance(arr, cupy.ndarray):
         return arr.get()
-    elif jax_avail and isinstance(arr, jax.numpy.ndarray):
-        return np.asarray(arr)
     
 
     

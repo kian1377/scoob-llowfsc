@@ -1,0 +1,6 @@
+*__pycache__/
+*.ipynb_checkpoints/
+build/*
+dist/*
+
+scoob_llowfsc.egg-info

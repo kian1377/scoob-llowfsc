@@ -1,6 +1,6 @@
 from .math_module import xp, _scipy, ensure_np_array
-import lina.utils as utils
-from lina.imshows import imshow1, imshow2, imshow3
+import scoob_llowfsc.utils as utils
+from scoob_llowfsc.imshows import imshow1, imshow2, imshow3
 
 import numpy as np
 import astropy.units as u
@@ -102,13 +102,12 @@ def inject_wfe(wfe_time_series, wfe_modes, freq, wfe_channel):
         print('Injecting WFE ...')
         i = 0
         while i<Nsamps+1:
-            if i==Nsamps:
-                i = 0
+            if i==Nsamps: i = 0
             wfe = np.sum( wfe_time_series[:, i, None, None] * wfe_modes, axis=0)
             wfe_channel.write(1e6 * wfe)
             time.sleep(1/freq)
             i += 1
-            # print(i)
+
     except KeyboardInterrupt:
         print('Stopped injecting WFE.')
         wfe_channel.write(np.zeros(wfe_channel.shape))
@@ -151,41 +150,40 @@ def calibrate_without_fsm(I, control_mask, dm_modes, amps=5e-9, plot=False):
 
 def single_iteration(
     I,
-    locam_ref_channel,
-    locam_delta_channel,  
+    camlo_channel,
+    camlo_ref_channel,
+    camlo_delta_channel,  
     gain_channel, 
     control_matrix, 
     modal_matrix,
     control_mask, 
-    thresh=0,
     leakage=0.0, 
     plot=False,
     clear=False,
     ):
 
-    image = I.snap_locam()
-    del_im = image - (locam_ref_channel.grab_latest() + locam_delta_channel.grab_latest())
+    image = camlo_channel.grab_latest()
+    del_im = image - (camlo_ref_channel.grab_latest() + camlo_delta_channel.grab_latest())
 
     # compute the DM command with the image based on the time delayed wavefront
-    modal_coeff = - control_matrix.dot( del_im[control_mask] )
-    modal_coeff *= np.abs(modal_coeff) >= thresh
+    modal_coeff = -control_matrix.dot( del_im[control_mask] )
     modal_coeff *= gain_channel.grab_latest()[0]
     del_dm_command = modal_matrix.T.dot(modal_coeff).reshape(I.Nact,I.Nact)
-    # I.add_dm(del_dm_command)
 
-    total_command = (1-leakage) * ensure_np_array(I.get_dm()) + del_dm_command
+    total_command = (1-leakage)*I.get_dm() + del_dm_command
     I.set_dm(total_command)
 
     if plot:
         dm_command = I.get_dm()
         pv_stroke = xp.max(dm_command) - xp.min(dm_command)
         rms_stroke = xp.sqrt(xp.mean(xp.square(dm_command[I.dm_mask])))
-        imshow3(del_im, del_dm_command, dm_command, 
-                'Measured Difference Image', 
-                'Computed DM Correction',
-                f'PV Stroke = {1e9*pv_stroke:.1f}nm\nRMS Stroke = {1e9*rms_stroke:.1f}nm', 
-                cmap1='magma', cmap2='viridis', cmap3='viridis',
-                )
+        imshow3(
+            del_im, del_dm_command, dm_command, 
+            'Measured Difference Image', 
+            'Computed DM Correction',
+            f'PV Stroke = {1e9*pv_stroke:.1f}nm\nRMS Stroke = {1e9*rms_stroke:.1f}nm', 
+            cmap1='magma', cmap2='viridis', cmap3='viridis',
+        )
         if clear: clear_output(wait=True)
 
 

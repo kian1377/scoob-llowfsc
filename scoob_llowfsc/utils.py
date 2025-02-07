@@ -1,5 +1,5 @@
 from .math_module import xp, xcipy, ensure_np_array
-from llowfsc.imshows import imshow1, imshow2, imshow3
+from scoob_llowfsc.imshows import imshow1, imshow2, imshow3
 
 import numpy as np
 import scipy

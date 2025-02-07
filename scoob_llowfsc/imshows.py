@@ -1,9 +1,8 @@
-from .math_module import xp, _scipy, cupy_avail, ensure_np_array
-import lina.utils as utils
+from .math_module import xp, xcipy, ensure_np_array
+import scoob_llowfsc.utils as utils
 
 import numpy as np
 import scipy
-
 import astropy.units as u
 
 import matplotlib.pyplot as plt
@@ -12,18 +11,24 @@ from mpl_toolkits.axes_grid1 import make_axes_locatable
 from matplotlib.colors import LogNorm, Normalize
 from IPython.display import display, clear_output
 
-def imshow1(arr, 
-            title=None, 
-            xlabel=None,
-            npix=None,
-            lognorm=False, vmin=None, vmax=None,
-            cmap='magma',
-            pxscl=None,
-            axlims=None,
-            patches=None,
-            grid=False, 
-            figsize=(4,4), dpi=125, 
-            display_fig=True, return_fig=False):
+def imshow1(
+        arr, 
+        title=None, 
+        xlabel=None,
+        npix=None,
+        lognorm=False, 
+        vmin=None, 
+        vmax=None,
+        cmap='magma',
+        pxscl=None,
+        axlims=None,
+        patches=None,
+        grid=False, 
+        figsize=(4,4), 
+        dpi=125, 
+        display_fig=True, 
+        return_fig=False,
+    ):
     fig,ax = plt.subplots(nrows=1, ncols=1, figsize=figsize, dpi=dpi)
     
     if npix is not None:
@@ -64,20 +69,22 @@ def imshow1(arr,
     if return_fig: 
         return fig,ax
     
-def imshow2(arr1, arr2, 
-            title1=None, title2=None,
-            xlabel=None, xlabel1=None, xlabel2=None,
-            npix=None, npix1=None, npix2=None,
-            pxscl=None, pxscl1=None, pxscl2=None,
-            axlims=None, axlims1=None, axlims2=None,
-            grid=False, grid1=False, grid2=False,
-            cmap1='magma', cmap2='magma',
-            lognorm=False, lognorm1=False, lognorm2=False,
-            vmin1=None, vmax1=None, vmin2=None, vmax2=None,
-            patches1=None, patches2=None,
-            display_fig=True, 
-            return_fig=False, 
-            figsize=(10,4), dpi=125, wspace=0.2):
+def imshow2(
+        arr1, arr2, 
+        title1=None, title2=None,
+        xlabel=None, xlabel1=None, xlabel2=None,
+        npix=None, npix1=None, npix2=None,
+        pxscl=None, pxscl1=None, pxscl2=None,
+        axlims=None, axlims1=None, axlims2=None,
+        grid=False, grid1=False, grid2=False,
+        cmap1='magma', cmap2='magma',
+        lognorm=False, lognorm1=False, lognorm2=False,
+        vmin1=None, vmax1=None, vmin2=None, vmax2=None,
+        patches1=None, patches2=None,
+        display_fig=True, 
+        return_fig=False, 
+        figsize=(10,4), dpi=125, wspace=0.2,
+    ):
     fig,ax = plt.subplots(nrows=1, ncols=2, figsize=figsize, dpi=dpi)
     
     npix1, npix2 = (npix, npix) if npix is not None else (npix1, npix2)
@@ -159,20 +166,22 @@ def imshow2(arr1, arr2,
     if display_fig: display(fig)
     if return_fig: return fig,ax
 
-def imshow3(arr1, arr2, arr3,
-            title1=None, title2=None, title3=None, titlesize=12,
-            npix=None, npix1=None, npix2=None, npix3=None,
-            pxscl=None, pxscl1=None, pxscl2=None, pxscl3=None, 
-            axlims=None, axlims1=None, axlims2=None, axlims3=None,
-            xlabel=None, xlabel1=None, xlabel2=None, xlabel3=None,
-            cmap1='magma', cmap2='magma', cmap3='magma',
-            lognorm=False, lognorm1=False, lognorm2=False, lognorm3=False,
-            vmin1=None, vmax1=None, vmin2=None, vmax2=None, vmin3=None, vmax3=None, 
-            patches1=None, patches2=None, patches3=None,
-            grid=False, grid1=False, grid2=False, grid3=False,
-            display_fig=True, 
-            return_fig=False,
-            figsize=(14,7), dpi=125, wspace=0.3):
+def imshow3(
+        arr1, arr2, arr3,
+        title1=None, title2=None, title3=None, titlesize=12,
+        npix=None, npix1=None, npix2=None, npix3=None,
+        pxscl=None, pxscl1=None, pxscl2=None, pxscl3=None, 
+        axlims=None, axlims1=None, axlims2=None, axlims3=None,
+        xlabel=None, xlabel1=None, xlabel2=None, xlabel3=None,
+        cmap1='magma', cmap2='magma', cmap3='magma',
+        lognorm=False, lognorm1=False, lognorm2=False, lognorm3=False,
+        vmin1=None, vmax1=None, vmin2=None, vmax2=None, vmin3=None, vmax3=None, 
+        patches1=None, patches2=None, patches3=None,
+        grid=False, grid1=False, grid2=False, grid3=False,
+        display_fig=True, 
+        return_fig=False,
+        figsize=(14,7), dpi=125, wspace=0.3
+    ):
     fig,ax = plt.subplots(nrows=1, ncols=3, figsize=figsize, dpi=dpi)
     
     npix1, npix2, npix3 = (npix, npix, npix) if npix is not None else (npix1, npix2, npix3)
@@ -262,12 +271,12 @@ def imshow3(arr1, arr2, arr3,
     cax = divider.append_axes("right", size="4%", pad=0.075)
     fig.colorbar(im, cax=cax)
     
-    # second plot
+    # third plot
     im = ax[2].imshow(arr3, cmap=cmap3, norm=norm3, extent=extent3)
     if axlims3 is not None:
         ax[2].set_xlim(axlims3[:2])
         ax[2].set_ylim(axlims3[2:])
-    if grid or grid3: ax[1].grid()
+    if grid or grid3: ax[2].grid()
     ax[2].tick_params(axis='x', labelsize=9, rotation=30)
     ax[2].tick_params(axis='y', labelsize=9, rotation=30)
     ax[2].set_xlabel(xlabel3)

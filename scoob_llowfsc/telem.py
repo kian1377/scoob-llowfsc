@@ -5,6 +5,7 @@ import subprocess
 import glob
 from pathlib import Path
 import os
+import shutil
 
 import magpyx
 from magpyx.utils import ImageStream
@@ -32,5 +33,28 @@ def unpack_telem_data(telem_path, data_path):
 
 def parse_telem_fnames(data_path):
     sorted(glob.glob(str(data_path)))
+
+def make_dir(dir_path):
+    subprocess.run(['mkdir',str(dir_path)])
+
+def move_files(source_path, target_path):
+    file_names = os.listdir(str(source_path))
+    for fname in file_names:
+        shutil.move(str(source_path/fname), str(target_path/fname))
+        # src = str(source_path/fname)
+        # dest = str(target_path)
+        # subprocess.run(['mv', src, dest], check=True)
+
+def delete_all_data(dir_path):
+    directory = str(dir_path)
+    for filename in os.listdir(directory):
+        file_path = os.path.join(directory, filename)
+        try:
+            if os.path.isfile(file_path) or os.path.islink(file_path):
+                os.unlink(file_path)
+            elif os.path.isdir(file_path):
+                shutil.rmtree(file_path)
+        except Exception as e:
+            print('Failed to delete %s. Reason: %s' % (file_path, e))
 
 

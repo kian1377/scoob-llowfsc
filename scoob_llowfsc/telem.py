@@ -14,11 +14,11 @@ from purepyindi import INDIClient
 import purepyindi2
 from purepyindi2 import IndiClient
 
-camsci_path = Path('/opt/MagAOX/telem/camnsv/')
-camlo_path = Path('/opt/MagAOX/telem/camlo/')
-dm_llowfsc_path = Path('/opt/MagAOX/telem/dm00disp01/')
-dm_howfsc_path = Path('/opt/MagAOX/telem/dm00disp02/')
-dm_wfe_path = Path('/opt/MagAOX/telem/dm00disp03/')
+camsci_path = Path('/opt/MagAOX/rawimages/camsci/')
+camlo_path = Path('/opt/MagAOX/rawimages/camlo/')
+dm_llowfsc_path = Path('/opt/MagAOX/rawimages/dm00disp01/')
+dm_howfsc_path = Path('/opt/MagAOX/rawimages/dm00disp02/')
+dm_wfe_path = Path('/opt/MagAOX/rawimages/dm00disp03/')
 
 def toggle(on, channel, client):
     client.wait_for_properties([f'telem_{channel}.writing'])
@@ -41,9 +41,6 @@ def move_files(source_path, target_path):
     file_names = os.listdir(str(source_path))
     for fname in file_names:
         shutil.move(str(source_path/fname), str(target_path/fname))
-        # src = str(source_path/fname)
-        # dest = str(target_path)
-        # subprocess.run(['mv', src, dest], check=True)
 
 def delete_all_data(dir_path):
     directory = str(dir_path)

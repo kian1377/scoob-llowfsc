@@ -73,7 +73,7 @@ def generate_time_series(psd, f_max, rms=None,  seed=123,):
     X_new = X_new * np.sqrt(N) / np.sqrt(2)
 
     # This is the new time series with a given PSD
-    x_new = _scipy.fft.ifft(X_new)
+    x_new = xcipy.fft.ifft(X_new)
 
     if rms is not None: 
         x_new *= rms/xp.sqrt(xp.mean(xp.square(x_new)))

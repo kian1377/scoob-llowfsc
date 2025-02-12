@@ -93,14 +93,14 @@ class SCOOBI():
         self.dm_ref = dm_ref
         self.reset_dm()
         
-        xx = (np.linspace(0, self.Nact-1, self.Nact) - self.Nact/2 + 1/2) * self.act_spacing.to_value(u.mm)
+        xx = (np.linspace(0, self.Nact-1, self.Nact) - self.Nact/2 + 1/2) * self.act_spacing
         x,y = np.meshgrid(xx,xx)
         r = np.sqrt(x**2 + y**2)
-        self.dm_mask = r<10.5/2
-        self.dm_pupil_mask = r<9.6/2
+        self.dm_mask = r<10.5e-3/2
+        self.dm_pupil_mask = r<9.6e-3/2
 
         # Init camera settings
-        self.psf_pixelscale = 4.6e-6*u.m/u.pix
+        self.psf_pixelscale = 4.6e-6
         self.psf_pixelscale_lamDc = 0.307
         self.nbits = 16
         self.NCAMSCI = 1

@@ -22,7 +22,16 @@ class Process(threading.Timer):
 # time.sleep(5)
 # process.cancel()
 
-def calibrate_without_fsm(camlo_stream, dm_lo_stream, dm_modes, control_mask, amps=5e-9, NFRAMES=10, dm_delay=0.1, plot=False):
+def calibrate_without_fsm(
+        camlo_stream, 
+        dm_lo_stream, 
+        dm_modes, 
+        control_mask, 
+        amps=3e-9, 
+        NFRAMES=10, 
+        dm_delay=0.001, 
+        plot=False,
+    ):
     Nmask = int(control_mask.sum())
     Nmodes = dm_modes.shape[0]
 
@@ -37,8 +46,10 @@ def calibrate_without_fsm(camlo_stream, dm_lo_stream, dm_modes, control_mask, am
         mode = dm_modes[i]
 
         dm_lo_stream.write(amp*mode*1e6)
+        time.sleep(dm_delay)
         im_pos = np.mean( camlo_stream.grab_many(NFRAMES), axis=0 )
         dm_lo_stream.write(-2*amp*mode*1e6)
+        time.sleep(dm_delay)
         im_neg = np.mean( camlo_stream.grab_many(NFRAMES), axis=0 )
         dm_lo_stream.write(amp*mode*1e6)
 
@@ -62,7 +73,13 @@ def calibrate_without_fsm(camlo_stream, dm_lo_stream, dm_modes, control_mask, am
 
     return response_matrix, response_cube
 
-def update_locam_delta(response_matrix, modal_matrix, control_mask, dm_dh_stream, camlo_delta_stream,):
+def update_locam_delta(
+        response_matrix, 
+        modal_matrix, 
+        control_mask, 
+        dm_dh_stream, 
+        camlo_delta_stream,
+    ):
     del_ref_im = np.zeros(camlo_delta_stream.shape)
     del_ref_im[control_mask] = response_matrix.dot(modal_matrix.dot(1e-6*dm_dh_stream.grab_latest().ravel())/1024)
     camlo_delta_stream.write(del_ref_im)
@@ -92,7 +109,7 @@ def single_iteration(
         camlo_stream,
         camlo_ref_stream,
         camlo_delta_stream,  
-        gain_stream,
+        gains_stream,
         leak_stream, 
         control_matrix, 
         modal_matrix,
@@ -107,7 +124,7 @@ def single_iteration(
 
     # compute the DM command with the image based on the time delayed wavefront
     modal_coeff = -control_matrix.dot( del_im[control_mask] )
-    modal_coeff *= gain_stream.grab_latest()[0]
+    modal_coeff *= gains_stream.grab_latest()[0]
     del_dm_command = modal_matrix.T.dot(modal_coeff).reshape(Nact,Nact)
 
     total_command = (1-leak_stream.grab_latest()[0,0])*dm_lo_stream.grab_latest()/1e6 + del_dm_command

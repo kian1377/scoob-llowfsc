@@ -73,7 +73,7 @@ def calibrate_without_fsm(
 
     return response_matrix, response_cube
 
-def update_locam_delta(
+def update_ref_delta(
         response_matrix, 
         modal_matrix, 
         control_mask, 

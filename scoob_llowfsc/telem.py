@@ -16,9 +16,9 @@ from purepyindi2 import IndiClient
 
 camsci_path = Path('/opt/MagAOX/rawimages/camsci/')
 camlo_path = Path('/opt/MagAOX/rawimages/camlo/')
-dm_llowfsc_path = Path('/opt/MagAOX/rawimages/dm00disp01/')
-dm_howfsc_path = Path('/opt/MagAOX/rawimages/dm00disp02/')
-dm_wfe_path = Path('/opt/MagAOX/rawimages/dm00disp03/')
+dm01_path = Path('/opt/MagAOX/rawimages/dm00disp01/')
+dm02_path = Path('/opt/MagAOX/rawimages/dm00disp02/')
+dm03_path = Path('/opt/MagAOX/rawimages/dm00disp03/')
 
 def toggle(on, channel, client):
     client.wait_for_properties([f'telem_{channel}.writing'])

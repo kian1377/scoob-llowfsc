@@ -20,12 +20,12 @@ def measure_probes(I, probe_cube, probe_amplitude, pca_modes=None, plot=False):
 
         I.add_dm(probe_amplitude * probe) # add positive probe
         im_pos = I.snap()
-        I.add_dm(-probe_amplitude*probe) # remove positive probe
+        I.add_dm(-probe_amplitude * probe) # remove positive probe
         I.add_dm(-probe_amplitude * probe) # add negative probe
         im_neg = I.snap()
         I.add_dm(probe_amplitude*probe) # remove negative probe
 
-        diff_ims.append((im_pos - im_neg) / (2*probe_amplitude))
+        diff_ims.append((im_pos - im_neg) / (2 * probe_amplitude))
 
     diff_ims = xp.array(diff_ims)
 
@@ -43,44 +43,37 @@ def calibrate(
         probe_amplitude, probe_modes, 
         calibration_amplitude, calibration_modes, 
         scale_factors=None, 
-        return_all=False,
         plot_responses=False, 
     ):
     print('Calibrating iEFC...')
-    
+
     Nprobes = probe_modes.shape[0]
     Nmodes = calibration_modes.shape[0]
 
-    response_matrix = []
+    scale_factors = [1]*Nmodes if scale_factors is None else scale_factors
+
     calib_amps = []
-    if return_all: # be ready to store the full focal plane responses (difference images)
-        response_cube = []
+    response_matrix = []
+    response_cube = []
     
     # Loop through all modes that you want to control
     start = time.time()
     for ci, calibration_mode in enumerate(calibration_modes):
         response = 0
-        for s in [-1, 1]: # We need a + and - probe to estimate the jacobian
-            dm_mode = calibration_mode.reshape(I.Nact, I.Nact)
+    
+        dm_mode = calibration_mode.reshape(I.Nact, I.Nact)
+        calib_amp = calibration_amplitude * scale_factors[ci]
+        calib_amps.append(calib_amp)
 
-            if scale_factors is not None: 
-                calib_amp = calibration_amplitude * scale_factors[ci]
-            else:
-                calib_amp = calibration_amplitude
+        I.add_dm(calib_amp * dm_mode) # add positive calibration mode
+        pos_diff_ims = measure_probes(I, probe_modes, probe_amplitude)
+        I.add_dm(-calib_amp * dm_mode) # remove positive calibration mode
 
-            # Add the mode to the DMs
-            I.add_dm(s * calib_amp * dm_mode)
-            
-            # Compute reponse with difference images of probes
-            diff_ims = measure_probes(I, probe_modes, probe_amplitude)
-            calib_amps.append(calib_amp)
-            response += s * diff_ims.reshape(Nprobes, I.npsf**2) / (2 * calib_amp)
-            
-            # Remove the mode form the DMs
-            I.add_dm(-s * calib_amp * dm_mode) # remove the mode
+        I.add_dm(-calib_amp * dm_mode) # add negative calibration mode
+        neg_diff_ims = measure_probes(I, probe_modes, probe_amplitude)
+        I.add_dm(-calib_amp * dm_mode) # remove positive calibration mode
         
-        print(f"\tCalibrated mode {ci+1:d}/{calibration_modes.shape[0]:d} in {time.time()-start:.3f}s", end='')
-        print("\r", end="")
+        response = (pos_diff_ims - neg_diff_ims) / (2*calib_amp)
         
         if probe_modes.shape[0]==2:
             response_matrix.append( xp.concatenate([response[0, control_mask.ravel()],
@@ -90,23 +83,21 @@ def calibrate(
                                                     response[1, control_mask.ravel()],
                                                     response[2, control_mask.ravel()]]) )
         
-        if return_all: 
-            response_cube.append(response)
-    print('\nCalibration complete.')
+        response_cube.append(response)
+        print(f"\tCalibrated mode {ci+1:d}/{calibration_modes.shape[0]:d} in {time.time()-start:.3f}s", end='')
+        print("\r", end="")
 
     response_matrix = xp.array(response_matrix).T # this is the response matrix to be inverted
-    if return_all:
-        response_cube = xp.array(response_cube)
+    response_cube = xp.array(response_cube)
+
+    print('\nCalibration complete.')
     
     if plot_responses:
         dm_response_map = xp.sqrt(xp.mean(xp.square(response_matrix.dot(calibration_modes.reshape(Nmodes, -1))), axis=0))
         dm_response_map = dm_response_map.reshape(I.Nact,I.Nact) / xp.max(dm_response_map)
         imshow1(dm_response_map, 'DM RMS Actuator Responses', lognorm=True, vmin=1e-2)
-            
-    if return_all:
-        return response_matrix, xp.array(response_cube)
-    else:
-        return response_matrix
+           
+    return response_matrix, xp.array(response_cube)
     
 def run(I, 
         data,
@@ -120,7 +111,6 @@ def run(I,
         plot_current=True,
         plot_all=False,
         plot_probes=False,
-        plot_radial_contrast=False,
     ):
     
     print('Running iEFC...')

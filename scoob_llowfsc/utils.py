@@ -169,6 +169,12 @@ def create_circ_mask(h, w, center=None, radius=None):
     mask = dist_from_center <= radius
     return mask
 
+# def create_dm_mask:
+    # xx = (np.linspace(0, self.Nact-1, self.Nact) - self.Nact/2 + 1/2) * self.act_spacing
+    # x,y = np.meshgrid(xx,xx)
+    # r = np.sqrt(x**2 + y**2)
+    # self.dm_mask = r<10.5e-3/2
+
 # Creating focal plane masks
 def create_annular_focal_plane_mask(
         npsf, 

@@ -125,4 +125,43 @@ def plot_time_series(times, coeff, name='Coefficients', xlims=None, ylims=None):
     plt.xlabel('Seconds')
     plt.show()
 
+def plot_psd_and_time_series(
+        freqs, psd, times, coeff,
+        psd_name='PSD', 
+        psd_xlims=None, psd_ylims=None,
+        coeff_name='Coefficients', 
+        coeff_xlims=None, coeff_ylims=None,
+        coeff_xticks=None,
+        figsize=(16,9),
+        dpi=125,
+    ):
+    freqs = ensure_np_array(freqs)
+    psd = ensure_np_array(psd)
+
+    fig, ax = plt.subplots(nrows=1, ncols=2, figsize=figsize, dpi=dpi)
+    
+    ax[0].plot(freqs,psd)
+    ax[0].set_title(f'Temporal PSD {psd_name}')
+    ax[0].set_yscale("log")
+    ax[0].set_xscale("log")
+    ax[0].set_ylabel(f'PSD Amplitude')
+    ax[0].grid()
+    ax[0].set_xlim(psd_xlims)
+    ax[0].set_ylim(psd_ylims)
+    ax[0].set_xlabel('Hz')
+
+    times = ensure_np_array(times)
+    coeff = ensure_np_array(coeff)
+    c_rms = np.sqrt(np.mean(np.square(coeff)))
+    ax[1].plot(times, coeff)
+    ax[1].set_title(f'Time series of {coeff_name}, RMS = {c_rms:.3e}')
+    ax[1].set_ylabel(f'{coeff_name} Amplitudes')
+    if coeff_xticks is not None: ax[1].set_xticks(coeff_xticks)
+    ax[1].grid()
+    ax[1].set_xlim(coeff_xlims)
+    ax[1].set_ylim(coeff_ylims)
+    ax[1].set_xlabel('Seconds')
+
+    plt.show()
+
 

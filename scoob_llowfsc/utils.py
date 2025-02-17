@@ -183,7 +183,6 @@ def create_annular_focal_plane_mask(
         orad,  
         edge=None,
         rotation=0,
-        plot=False,
     ):
     x = (xp.linspace(-npsf/2, npsf/2-1, npsf) + 1/2)*psf_pixelscale
     x,y = xp.meshgrid(x,x)

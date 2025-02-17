@@ -53,12 +53,6 @@ def calibrate_without_fsm(
         im_neg = np.mean( camlo_stream.grab_many(NFRAMES), axis=0 )
         dm_lo_stream.write(amp*mode*1e6)
 
-        # I.add_dm(amp*mode)
-        # im_pos = I.snap_locam()
-        # I.add_dm(-2*amp*mode)
-        # im_neg = I.snap_locam()
-        # I.add_dm(amp*mode)
-
         diff = im_pos - im_neg
         response_cube[i] = copy.copy(diff) / (2 * amp)
         responses[i] = copy.copy(diff)[control_mask] / (2 * amp)
@@ -72,6 +66,24 @@ def calibrate_without_fsm(
     response_matrix = responses.T
 
     return response_matrix, response_cube
+
+def make_shear_chops(ref_locam_im, shear_pix=1, order=3, central_diff=False, plot=False):
+    nlocam = ref_locam_im.shape[0]
+    shear_chops = xp.zeros((2, nlocam, nlocam))
+    if central_diff:
+        shear_chops_x1 = ( xcipy.ndimage.shift(ref_locam_im, (0,shear_pix), order=order) - ref_locam_im )
+        shear_chops_x2 = ( xcipy.ndimage.shift(ref_locam_im, (0,-shear_pix), order=order) - ref_locam_im ) 
+        shear_chops[0] = ( shear_chops_x1 - shear_chops_x2 ) / (2*shear_pix)
+
+        shear_chops_y1 = ( xcipy.ndimage.shift(ref_locam_im, (shear_pix,0), order=order) - ref_locam_im )
+        shear_chops_y2 = ( xcipy.ndimage.shift(ref_locam_im, (-shear_pix,0), order=order) - ref_locam_im )
+        shear_chops[1] = ( shear_chops_y1 - shear_chops_y2 ) / (2*shear_pix)
+
+    else:
+        shear_chops[0] = ( xcipy.ndimage.shift(ref_locam_im, (0,shear_pix), order=order) - ref_locam_im ) / shear_pix
+        shear_chops[1] = ( xcipy.ndimage.shift(ref_locam_im, (shear_pix,0), order=order) - ref_locam_im ) / shear_pix
+    if plot: imshow2(shear_chops[0], shear_chops[1])
+    return shear_chops
 
 def update_ref_delta(
         response_matrix, 
@@ -131,32 +143,29 @@ def single_iteration(
     dm_lo_stream.write(total_command * 1e6)
 
     if plot:
-        dm_command = I.get_dm()
-        pv_stroke = xp.max(dm_command) - xp.min(dm_command)
-        rms_stroke = xp.sqrt(xp.mean(xp.square(dm_command[I.dm_mask])))
         imshow3(
-            del_im, del_dm_command, dm_command, 
+            del_im, del_dm_command, total_command, 
             'Measured Difference Image', 
             'Computed DM Correction',
-            f'PV Stroke = {1e9*pv_stroke:.1f}nm\nRMS Stroke = {1e9*rms_stroke:.1f}nm', 
+            'DM Command', 
             cmap1='magma', cmap2='viridis', cmap3='viridis',
         )
         if clear: clear_output(wait=True)
 
-def inject_wfe(wfe_time_series, wfe_modes, wfe_stream, interval=75e-6):
-    Nsamps = wfe_time_series.shape[1]
-    try:
-        print('Injecting WFE ...')
-        i = 0
-        while i<Nsamps+1:
-            if i==Nsamps: i = 0
-            wfe = np.sum( wfe_time_series[:, i, None, None] * wfe_modes, axis=0)
-            wfe_stream.write(1e6 * wfe)
-            time.sleep(interval)
-            i += 1
-    except KeyboardInterrupt:
-        print('Stopped injecting WFE.')
-        wfe_stream.write(np.zeros(wfe_stream.shape))
+# def inject_wfe(wfe_time_series, wfe_modes, wfe_stream, interval=75e-6):
+#     Nsamps = wfe_time_series.shape[1]
+#     try:
+#         print('Injecting WFE ...')
+#         i = 0
+#         while i<Nsamps+1:
+#             if i==Nsamps: i = 0
+#             wfe = np.sum( wfe_time_series[:, i, None, None] * wfe_modes, axis=0)
+#             wfe_stream.write(1e6 * wfe)
+#             time.sleep(interval)
+#             i += 1
+#     except KeyboardInterrupt:
+#         print('Stopped injecting WFE.')
+#         wfe_stream.write(np.zeros(wfe_stream.shape))
 
 
 

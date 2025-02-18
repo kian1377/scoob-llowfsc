@@ -20,6 +20,7 @@ class single():
         ):
         
         self.wavelength_c = 633e-9*u.m
+        self.total_pupil_diam = 2.4 * u.m # assumed total telescope diameter
         self.dm_beam_diam = 9.1*u.mm # as measured in the Fresnel model
         self.lyot_pupil_diam = 9.1*u.mm
         self.lyot_diam = 8.6*u.mm
@@ -48,6 +49,7 @@ class single():
         self.ncamlo = 96
 
         ### INITIALIZE APERTURES ###
+        self.npix_rls = int( np.round( self.npix * self.rls_diam.to_value(u.mm) / self.lyot_pupil_diam.to_value(u.mm) ))
         pwf = poppy.FresnelWavefront(beam_radius=self.dm_beam_diam/2, npix=self.npix, oversample=1)
         rls_wf = poppy.FresnelWavefront(beam_radius=self.dm_beam_diam/2, npix=self.npix, oversample=self.rls_oversample)
         self.APERTURE = poppy.CircularAperture(radius=self.dm_beam_diam/2).get_transmission(pwf)
@@ -65,14 +67,20 @@ class single():
         self.BAP_MASK = self.APERTURE>0
 
         # Initialize pupil data
-        self.AMP = xp.ones((self.npix,self.npix))
-        self.OPD = xp.zeros((self.npix,self.npix))
+        self.PREFPM_AMP = xp.ones((self.npix,self.npix))
+        self.PREFPM_OPD = xp.zeros((self.npix,self.npix))
+
+        self.POSTFPM_AMP = xp.ones((self.npix,self.npix))
+        self.POSTFPM_OPD = xp.zeros((self.npix,self.npix))
+
+        self.RLS_AMP = xp.ones((self.npix,self.npix))
+        self.RLS_OPD = xp.zeros((self.npix,self.npix))
 
         # Initialize flux and normalization params
         self.Imax_ref = 1
         self.entrance_flux = entrance_flux
         if self.entrance_flux is not None:
-            pixel_area = (self.pupil_diam/self.npix)**2
+            pixel_area = (self.total_pupil_diam/self.npix)**2
             flux_per_pixel = self.entrance_flux * pixel_area
             self.APERTURE *= xp.sqrt(flux_per_pixel.to_value(u.photon/u.second))
 
@@ -204,8 +212,8 @@ class single():
         return post_vortex_pup_wf
 
     def calc_wfs_camsci(self, return_all=True, plot=False): # method for getting the PSF in photons
-        WFE = self.AMP * xp.exp(1j * 2*xp.pi/self.wavelength.to_value(u.m) * self.OPD )
-        E_EP =  self.APERTURE.astype(complex) * WFE
+        PREFPM_WFE = self.PREFPM_AMP * xp.exp(1j * 2*xp.pi/self.wavelength.to_value(u.m) * self.PREFPM_OPD )
+        E_EP =  self.APERTURE.astype(complex) * PREFPM_WFE
         E_EP = utils.pad_or_crop(E_EP, self.N)
         if plot: imshow2(xp.abs(E_EP), xp.angle(E_EP), 'EP WF', cmap2='twilight', npix=int(self.plot_oversample*self.npix))
 
@@ -217,7 +225,12 @@ class single():
             E_LP = self.apply_vortex(E_DM, plot=plot)
         else: 
             E_LP = copy.copy(E_DM)
-            
+        # print(E_LP.shape)
+
+        POSTFPM_WFE = self.POSTFPM_AMP * xp.exp(1j * 2*xp.pi/self.wavelength.to_value(u.m) * self.POSTFPM_OPD )
+        E_LP =  E_LP * utils.pad_or_crop(POSTFPM_WFE, E_LP.shape[0])
+        if plot: imshow2(xp.abs(E_LP), xp.angle(E_LP), 'At Lyot Pupil WF', cmap2='twilight', npix=int(self.plot_oversample*self.npix))
+
         E_LS = E_LP * utils.pad_or_crop(self.LYOT, E_LP.shape[0]).astype(complex)
         if plot: imshow2(xp.abs(E_LS), xp.angle(E_LS), 'After Lyot Stop WF', cmap2='twilight', npix=int(self.plot_oversample*self.npix))
 
@@ -230,8 +243,8 @@ class single():
             return E_CAMSCI
     
     def calc_wfs_camlo(self, return_all=True, plot=False): # method for getting the PSF in photons
-        WFE = self.AMP * xp.exp(1j * 2*xp.pi/self.wavelength.to_value(u.m) * self.OPD )
-        E_EP =  self.APERTURE.astype(complex) * WFE
+        PREFPM_WFE = self.PREFPM_AMP * xp.exp(1j * 2*xp.pi/self.wavelength.to_value(u.m) * self.PREFPM_OPD )
+        E_EP =  self.APERTURE.astype(complex) * PREFPM_WFE
         E_EP = utils.pad_or_crop(E_EP, self.N)
         if plot: imshow2(xp.abs(E_EP), xp.angle(E_EP), 'EP WF', cmap2='twilight', npix=int(self.plot_oversample*self.npix))
 
@@ -243,11 +256,14 @@ class single():
             E_LP = self.apply_vortex(E_DM, plot=plot)
         else: 
             E_LP = copy.copy(E_DM)
+        # print(E_LP.shape)
 
         E_LP = props.ang_spec(E_LP, self.wavelength, -150*u.mm, self.lyot_pupil_diam/(self.npix*u.pix))
         E_LP *= utils.pad_or_crop(self.OAP_AP, E_LP.shape[0])
-        # print(E_LP.shape)
         E_LP = props.ang_spec(E_LP, self.wavelength, 150*u.mm, self.lyot_pupil_diam/(self.npix*u.pix))
+        RLS_WFE = self.RLS_AMP * xp.exp(1j * 2*xp.pi/self.wavelength.to_value(u.m) * self.RLS_OPD )
+        E_LP =  E_LP * utils.pad_or_crop(RLS_WFE, E_LP.shape[0])
+        if plot: imshow2(xp.abs(E_LP), xp.angle(E_LP), 'At RLS WF', cmap2='twilight', npix=int(self.plot_oversample*self.npix))
 
         E_RLS = E_LP * utils.pad_or_crop(self.RLS, E_LP.shape[0]).astype(complex)
         if plot: imshow2(xp.abs(E_RLS), xp.angle(E_RLS), 'After RLS WF', cmap2='twilight')

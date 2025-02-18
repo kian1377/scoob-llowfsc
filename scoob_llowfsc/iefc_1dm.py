@@ -45,7 +45,6 @@ def calibrate(
         probe_amplitude, probe_modes, 
         calibration_amplitude, calibration_modes, 
         scale_factors=None, 
-        return_all=False,
         plot_responses=False, 
     ):
     print('Calibrating iEFC...')
@@ -55,8 +54,7 @@ def calibrate(
 
     response_matrix = []
     calib_amps = []
-    if return_all: # be ready to store the full focal plane responses (difference images)
-        response_cube = []
+    response_cube = []
     
     # Loop through all modes that you want to control
     start = time.time()
@@ -92,23 +90,25 @@ def calibrate(
                                                     response[1, control_mask.ravel()],
                                                     response[2, control_mask.ravel()]]) )
         
-        if return_all: 
-            response_cube.append(response)
+        response_cube.append(response)
     print('\nCalibration complete.')
 
     response_matrix = xp.array(response_matrix).T # this is the response matrix to be inverted
-    if return_all:
-        response_cube = xp.array(response_cube)
+    response_cube = xp.array(response_cube)
     
     if plot_responses:
         dm_response_map = xp.sqrt(xp.mean(xp.square(response_matrix.dot(calibration_modes.reshape(Nmodes, -1))), axis=0))
         dm_response_map = dm_response_map.reshape(sysi.Nact,sysi.Nact) / xp.max(dm_response_map)
-        imshow1(dm_response_map, 'DM RMS Actuator Responses', lognorm=True, vmin=1e-2)
+
+        fp_response_map = xp.sqrt( xp.mean( xp.abs(response_cube), axis=(0,1))).reshape(sysi.ncamsci, sysi.ncamsci)
+        fp_response_map = fp_response_map / xp.max(fp_response_map)
+        imshow2(
+            dm_response_map, fp_response_map, 
+            'DM RMS Actuator Responses', 
+            lognorm1=True, vmin1=1e-2,
+        )
             
-    if return_all:
-        return response_matrix, xp.array(response_cube)
-    else:
-        return response_matrix
+    return response_matrix, response_cube
     
 def run(sysi, 
         data,

@@ -140,6 +140,10 @@ class single():
         r = xp.sqrt(x**2 + y**2)
         self.hres_dot_mask = r>=0.15
 
+        # DETECTOR PARAMETERS
+        self.CAMLO = None
+        self.NCAMLO = 1
+
     def getattr(self, attr):
         return getattr(self, attr)
     
@@ -294,6 +298,11 @@ class single():
     
     def snap_camlo(self):
         camlo_im = xp.abs(self.calc_wfs_camlo(return_all=False))**2
+        if self.CAMLO is not None:
+            noisy_im = 0.0
+            for i in range(self.NCAMLO):
+                noisy_im += self.CAMLO.add_noise(camlo_im)
+            return noisy_im/self.NCAMLO
         return camlo_im
     
 

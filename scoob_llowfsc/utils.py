@@ -294,7 +294,51 @@ def create_fourier_probes(
         probes[i] = probe/xp.max(probe)
 
     return probes
-    
+
+
+def make_f(h=10, w=6, shift=(0,0), Nact=34):
+    f_command = xp.zeros((Nact, Nact))
+
+    top_row = Nact//2 + h//2 + shift[1]
+    mid_row = Nact//2 + shift[1]
+    row0 = Nact//2 - h//2 + shift[1]
+
+    col0 = Nact//2 - w//2 + shift[0] + 1
+    right_col = Nact//2 + w//2 + shift[0] + 1
+
+    rows = xp.arange(row0, top_row)
+    cols = xp.arange(col0, right_col)
+
+    f_command[rows, col0] = 1
+    f_command[top_row,cols] = 1
+    f_command[mid_row,cols] = 1
+    return f_command
+
+def make_ring(rad=15, Nact=34, thresh=1/2):
+    y,x = (xp.indices((Nact, Nact)) - Nact//2 + 1/2)
+    r = xp.sqrt(x**2 + y**2)
+    ring = (rad-thresh<r) * (r < rad+thresh)
+    ring = ring.astype(float)
+    return ring
+
+def make_fourier_command(x_cpa=10, y_cpa=10, Nact=34):
+    # cpa = cycles per aperture
+    # max cpa must be Nact/2
+    if x_cpa>Nact/2 or y_cpa>Nact/2:
+        raise ValueError('The cycles per aperture is too high for the specified number of actuators.')
+    y,x = xp.indices((Nact, Nact)) - Nact//2
+    fourier_command = xp.cos(2*np.pi*(x_cpa*x + y_cpa*y)/Nact)
+    return fourier_command
+
+def make_cross_command(xc=[0], yc=[0], Nact=34):
+    y,x = (xp.indices((Nact, Nact)) - Nact//2 + 1/2)
+    cross = xp.zeros((Nact,Nact))
+    for i in range(len(xc)):
+        cross[(xc[i]-0.5<=x) & (x<xc[i]+0.5)] = 1
+        cross[(yc[i]-0.5<=y) & (y<yc[i]+0.5)] = 1
+    # cross
+    return cross
+
 def get_radial_dist(shape, scaleyx=(1.0, 1.0), cenyx=None):
     '''
     Compute the radial separation of each pixel

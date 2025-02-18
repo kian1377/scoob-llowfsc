@@ -15,6 +15,7 @@ class single():
     def __init__(
             self,
             wavelength=633e-9*u.m, 
+            dm_ref=xp.zeros((34,34)),
             entrance_flux=None, 
         ):
         
@@ -36,10 +37,11 @@ class single():
         self.wavelength = wavelength
         self.use_vortex = False
         self.plot_vortex = False
+        self.plot_oversample = 1.5
         
         self.npix = 1000
         self.def_oversample = 2.048 # default oversample
-        self.rls_oversample = 3 # reflective lyot stop oversample
+        self.rls_oversample = 4.096 # reflective lyot stop oversample
         self.Ndef = int(self.npix*self.def_oversample)
         self.Nrls = int(self.npix*self.rls_oversample)
         self.ncamsci = 150
@@ -53,17 +55,20 @@ class single():
         rls_ap = poppy.CircularAperture(radius=self.rls_diam/2).get_transmission(rls_wf)
         self.RLS = rls_ap - utils.pad_or_crop( self.LYOTSTOP, self.Nrls)
         rls_ap = 0
-        self.oap_ap = poppy.CircularAperture(radius=15*u.mm/2).get_transmission(rls_wf)
-        self.use_locam = False
+        self.OAP_AP = poppy.CircularAperture(radius=15*u.mm/2).get_transmission(rls_wf)
+        self.use_camlo = False
 
         self.LYOT = self.LYOTSTOP
         self.oversample = self.def_oversample
         self.N = self.Ndef # default to not using RLS
 
         self.BAP_MASK = self.APERTURE>0
+
+        # Initialize pupil data
         self.AMP = xp.ones((self.npix,self.npix))
         self.OPD = xp.zeros((self.npix,self.npix))
 
+        # Initialize flux and normalization params
         self.Imax_ref = 1
         self.entrance_flux = entrance_flux
         if self.entrance_flux is not None:
@@ -75,6 +80,7 @@ class single():
         self.Nact = 34
         self.dm_shape = (self.Nact, self.Nact)
         self.act_spacing = 300e-6*u.m
+        self.dm_pxscl = self.dm_beam_diam.to_value(u.m) / self.npix
         self.inf_sampling = self.act_spacing.to_value(u.m)/self.dm_pxscl
         self.inf_fun = dm.make_gaussian_inf_fun(
             act_spacing=self.act_spacing, 
@@ -100,7 +106,8 @@ class single():
         self.Mx = xp.exp(-1j*2*np.pi*xp.outer(fx,xc)) # forward DM model MFT matrices
         self.My = xp.exp(-1j*2*np.pi*xp.outer(yc,fy))
 
-        self.dm_ref = xp.zeros((self.Nact, self.Nact))
+        self.dm_ref = copy.copy(dm_ref)
+        self.dm_command = copy.copy(dm_ref)
 
         ### INITIALIZE VORTEX PARAMETERS ###
         self.oversample_vortex = 4.096
@@ -146,120 +153,129 @@ class single():
         self.set_dm(xp.zeros((self.Nact,self.Nact)))
     
     def set_dm(self, command):
-        self.dm_command = command
+        self.dm_command = copy.copy(command)
         
     def add_dm(self, command):
-        self.dm_command += command
+        self.dm_command += copy.copy( command )
         
     def get_dm(self):
-        return self.dm_command
+        return copy.copy( self.dm_command )
 
-    def use_llowfsc(self, use=True):
-        if use:
-            self.use_locam = True
-            self.N = self.Nrls
-            self.oversample = self.rls_oversample
-            self.LYOT = self.RLS
-        else:
-            self.use_locam = False
-            self.N = self.Ndef
-            self.oversample = self.def_oversample
-            self.LYOT = self.LYOTSTOP
+    def compute_dm_phasor(self):
+        mft_command = self.Mx @ self.dm_command @ self.My
+        fourier_surf = self.inf_fun_fft * mft_command
+        dm_surf = xp.fft.fftshift( xp.fft.ifft2( xp.fft.ifftshift( fourier_surf, ))).real
+        dm_phasor = xp.exp(1j * 4*xp.pi/self.wavelength.to_value(u.m) * dm_surf )
+        dm_phasor = utils.pad_or_crop(dm_phasor, self.N)
+        return dm_phasor
 
     def apply_vortex(self, pupwf, plot=False):
         lres_wf = utils.pad_or_crop(pupwf, self.N_vortex_lres) # pad to the larger array for the low res propagation
         fp_wf_lres = props.fft(lres_wf)
         fp_wf_lres *= self.vortex_lres * (1 - self.lres_window) # apply low res (windowed) FPM
         pupil_wf_lres = props.ifft(fp_wf_lres)
-        pupil_wf_lres = utils.pad_or_crop(pupil_wf_lres, self.N,)
+        # pupil_wf_lres = utils.pad_or_crop(pupil_wf_lres, self.N,)
         if plot: 
             imshow2(xp.abs(pupil_wf_lres), xp.angle(pupil_wf_lres), 
-                            'FFT Pupil Amplitude', 'FFT Pupil Phase', 
-                            npix=int(1.5*self.npix), cmap2='twilight', 
+                            'FFT Lyot Pupil Amplitude', 'FFT Lyot Pupil Phase', 
+                            npix=int(self.plot_oversample*self.npix), cmap2='twilight', 
                             )
 
         fp_wf_hres = props.mft_forward(pupwf, self.npix, self.N_vortex_hres, self.hres_sampling, convention='-')
         fp_wf_hres *= self.vortex_hres * self.hres_window * self.hres_dot_mask # apply high res (windowed) FPM
-        pupil_wf_hres = props.mft_reverse(fp_wf_hres, self.hres_sampling, self.npix, self.N, convention='+')
+        pupil_wf_hres = props.mft_reverse(fp_wf_hres, self.hres_sampling, self.npix, self.N_vortex_lres, convention='+')
         if plot: 
             imshow2(
                 xp.abs(pupil_wf_hres), xp.angle(pupil_wf_hres), 
-                'MFT Pupil Amplitude', 'MFT Pupil Phase',
-                npix=int(1.5*self.npix), cmap2='twilight', 
+                'MFT Lyot Pupil Amplitude', 'MFT Lyot Pupil Phase',
+                npix=int(self.plot_oversample*self.npix), cmap2='twilight', 
             )
 
         post_vortex_pup_wf = (pupil_wf_lres + pupil_wf_hres)
         if plot: 
             imshow2(
                 xp.abs(post_vortex_pup_wf), xp.angle(post_vortex_pup_wf), 
-                'Total Pupil Amplitude', 'Total Pupil Phase',
-                npix=int(1.5*self.npix), cmap2='twilight', 
+                'Total Lyot Pupil Amplitude', 'Total Lyot Pupil Phase',
+                npix=int(self.plot_oversample*self.npix), cmap2='twilight', 
             )
 
         return post_vortex_pup_wf
 
-    def calc_wfs(self, return_all=True, plot=False): # method for getting the PSF in photons
+    def calc_wfs_camsci(self, return_all=True, plot=False): # method for getting the PSF in photons
         WFE = self.AMP * xp.exp(1j * 2*xp.pi/self.wavelength.to_value(u.m) * self.OPD )
         E_EP =  self.APERTURE.astype(complex) * WFE
-        if plot: imshow2(xp.abs(E_EP), xp.angle(E_EP), 'EP WF', cmap2='twilight', npix=int(1.5*self.npix))
+        E_EP = utils.pad_or_crop(E_EP, self.N)
+        if plot: imshow2(xp.abs(E_EP), xp.angle(E_EP), 'EP WF', cmap2='twilight', npix=int(self.plot_oversample*self.npix))
 
-        mft_command = self.Mx @ self.dm_command @ self.My
-        fourier_surf = self.inf_fun_fft * mft_command
-        dm_surf = xp.fft.fftshift( xp.fft.ifft2( xp.fft.ifftshift( fourier_surf, ))).real
-        DM_PHASOR = xp.exp(1j * 4*xp.pi/self.wavelength.to_value(u.m) * utils.pad_or_crop(dm_surf, self.N))
+        DM_PHASOR = self.compute_dm_phasor()
         E_DM = E_EP * DM_PHASOR
-        if plot: imshow2(xp.abs(E_DM), xp.angle(E_DM), 'After DM WF', cmap2='twilight', npix=int(1.5*self.npix))
+        if plot: imshow2(xp.abs(E_DM), xp.angle(E_DM), 'After DM WF', cmap2='twilight', npix=int(self.plot_oversample*self.npix))
 
         if self.use_vortex: 
             E_LP = self.apply_vortex(E_DM, plot=plot)
         else: 
             E_LP = copy.copy(E_DM)
-        if plot: imshow2(xp.abs(E_LP), xp.angle(E_LP), 'At Lyot Pupil WF', cmap2='twilight', npix=int(1.5*self.npix))
-
-        if self.use_locam:
-            E_LP = props.ang_spec(E_LP, self.wavelength, -150*u.mm, self.lyot_pupil_diam/(self.npix*u.pix))
-            E_LP *= self.oap_ap
-            E_LP = props.ang_spec(E_LP, self.wavelength, 150*u.mm, self.lyot_pupil_diam/(self.npix*u.pix))
-
-            E_RLS *= utils.pad_or_crop(self.LYOT, E_LP.shape[0]).astype(complex)
-            if plot: imshow2(xp.abs(E_RLS), xp.angle(E_RLS), 'After RLS WF', cmap2='twilight')
-
-            # Use TF and MFT to propagate to defocused image
-            self.llowfsc_fnum = self.llowfsc_fl.to_value(u.mm)/self.lyot_diam.to_value(u.mm)
-            tf = props.get_fresnel_TF(
-                self.llowfsc_defocus.to_value(u.m) * self.rls_oversample**2, 
-                self.Nrls, 
-                self.wavelength.to_value(u.m), 
-                self.llowfsc_fnum,
-            )
-            E_CAMLO = props.mft_forward(tf*E_RLS, self.npix*self.lyot_ratio, self.ncamlo, self.camlo_pxscl_lamD)
-            if plot: imshow2(xp.abs(E_CAMLO)**2, xp.angle(E_CAMLO), cmap2='twilight',)
-            return E_CAMLO
             
         E_LS = E_LP * utils.pad_or_crop(self.LYOT, E_LP.shape[0]).astype(complex)
-        if plot: imshow2(xp.abs(E_LS), xp.angle(E_LS), 'After Lyot Stop WF', cmap2='twilight', npix=int(1.5*self.npix))
+        if plot: imshow2(xp.abs(E_LS), xp.angle(E_LS), 'After Lyot Stop WF', cmap2='twilight', npix=int(self.plot_oversample*self.npix))
 
         E_CAMSCI = props.mft_forward(E_LS, self.npix*self.lyot_ratio, self.ncamsci, self.camsci_pxscl_lamD)
         if plot: imshow2(xp.abs(E_CAMSCI)**2, xp.angle(E_CAMSCI), 'CAMSCI WF', lognorm1=1, cmap2='twilight',)
 
         if return_all:
-            return E_EP, E_DM, E_LP, E_LS, E_CAMSCI
+            return E_EP, DM_PHASOR, E_DM, E_LP, E_LS, E_CAMSCI
         else:
             return E_CAMSCI
     
-    def calc_wf(self):
-        self.use_llowfsc(False)
-        fpwf = self.calc_wfs(save_wfs=False) / xp.sqrt(self.Imax_ref)
+    def calc_wfs_camlo(self, return_all=True, plot=False): # method for getting the PSF in photons
+        WFE = self.AMP * xp.exp(1j * 2*xp.pi/self.wavelength.to_value(u.m) * self.OPD )
+        E_EP =  self.APERTURE.astype(complex) * WFE
+        E_EP = utils.pad_or_crop(E_EP, self.N)
+        if plot: imshow2(xp.abs(E_EP), xp.angle(E_EP), 'EP WF', cmap2='twilight', npix=int(self.plot_oversample*self.npix))
+
+        DM_PHASOR = self.compute_dm_phasor()
+        E_DM = E_EP * DM_PHASOR
+        if plot: imshow2(xp.abs(E_DM), xp.angle(E_DM), 'After DM WF', cmap2='twilight', npix=int(self.plot_oversample*self.npix))
+
+        if self.use_vortex: 
+            E_LP = self.apply_vortex(E_DM, plot=plot)
+        else: 
+            E_LP = copy.copy(E_DM)
+
+        E_LP = props.ang_spec(E_LP, self.wavelength, -150*u.mm, self.lyot_pupil_diam/(self.npix*u.pix))
+        E_LP *= utils.pad_or_crop(self.OAP_AP, E_LP.shape[0])
+        # print(E_LP.shape)
+        E_LP = props.ang_spec(E_LP, self.wavelength, 150*u.mm, self.lyot_pupil_diam/(self.npix*u.pix))
+
+        E_RLS = E_LP * utils.pad_or_crop(self.RLS, E_LP.shape[0]).astype(complex)
+        if plot: imshow2(xp.abs(E_RLS), xp.angle(E_RLS), 'After RLS WF', cmap2='twilight')
+
+        # Use TF and MFT to propagate to defocused image
+        self.llowfsc_fnum = self.llowfsc_fl.to_value(u.mm)/self.lyot_diam.to_value(u.mm)
+        camlo_tf = props.get_fresnel_TF(
+            self.llowfsc_defocus.to_value(u.m) * self.rls_oversample**2, 
+            self.Nrls, 
+            self.wavelength.to_value(u.m), 
+            self.llowfsc_fnum,
+        )
+        E_CAMLO = props.mft_forward(camlo_tf*E_RLS, self.npix*self.lyot_ratio, self.ncamlo, self.camlo_pxscl_lamD)
+        if plot: imshow2(xp.abs(E_CAMLO)**2, xp.angle(E_CAMLO), cmap2='twilight',)
+            
+        if return_all:
+            return E_EP, DM_PHASOR, E_DM, E_LP, E_RLS, E_CAMLO
+        else:
+            return E_CAMLO
+    
+    def calc_wf_camsci(self):
+        fpwf = self.calc_wfs_camsci( return_all=False ) / xp.sqrt(self.Imax_ref)
         return fpwf
     
     def snap_camsci(self):
-        self.use_llowfsc(False)
-        image = xp.abs(self.calc_wfs(save_wfs=False))**2 / self.Imax_ref
+        image = xp.abs(self.calc_wfs_camsci(return_all=False))**2 / self.Imax_ref
         return image
     
     def snap_camlo(self):
-        self.use_llowfsc()
-        camlo_im = xp.abs(self.calc_wfs(save_wfs=False))**2
+        camlo_im = xp.abs(self.calc_wfs_camlo(return_all=False))**2
         return camlo_im
     
 

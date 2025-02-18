@@ -7,3 +7,7 @@ scoob_llowfsc.egg-info
 
 data*/
 
+*example_wfe_data.pkl
+*example_iefc_data.pkl
+
+

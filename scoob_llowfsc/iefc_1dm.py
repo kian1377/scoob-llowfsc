@@ -144,8 +144,9 @@ def run(sysi,
         # print(modal_matrix.shape, modal_coeff.shape)
 
         del_command = modal_matrix.T.dot(modal_coeff).reshape(sysi.Nact,sysi.Nact)
+        sysi.add_dm(del_command)
         total_command = (1.0-leakage)*total_command + loop_gain*del_command
-        sysi.set_dm(total_command)
+        # sysi.set_dm(total_command)
 
         sysi.subtract_dark = True
         image_ni = sysi.snap_camsci()

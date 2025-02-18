@@ -105,6 +105,8 @@ class single():
 
         self.Mx = xp.exp(-1j*2*np.pi*xp.outer(fx,xc)) # forward DM model MFT matrices
         self.My = xp.exp(-1j*2*np.pi*xp.outer(yc,fy))
+        self.Mx_back = xp.exp(1j*2*np.pi*xp.outer(xc,fx)) # adjoint DM model MFT matrices
+        self.My_back = xp.exp(1j*2*np.pi*xp.outer(fy,yc))
 
         self.dm_ref = copy.copy(dm_ref)
         self.dm_command = copy.copy(dm_ref)

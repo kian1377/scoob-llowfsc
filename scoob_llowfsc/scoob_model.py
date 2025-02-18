@@ -73,13 +73,33 @@ class single():
 
         ### INITIALIZE DM PARAMETERS ###
         self.Nact = 34
-        act_spacing = 300e-6*u.m
-        dm_pxscl = self.dm_beam_diam.to_value(u.m)/self.npix
-        inf_sampling = act_spacing.to_value(u.m)/dm_pxscl
-        inf_fun = dm.make_gaussian_inf_fun(act_spacing=act_spacing, sampling=inf_sampling, coupling=0.15, Nact=self.Nact+2)
-        self.DM = dm.DeformableMirror(inf_fun=inf_fun, inf_sampling=inf_sampling, name='DM (pupil)')
-        self.dm_mask = self.DM.dm_mask
-        self.Nacts = self.DM.Nacts
+        self.dm_shape = (self.Nact, self.Nact)
+        self.act_spacing = 300e-6*u.m
+        self.inf_sampling = self.act_spacing.to_value(u.m)/self.dm_pxscl
+        self.inf_fun = dm.make_gaussian_inf_fun(
+            act_spacing=self.act_spacing, 
+            sampling=self.inf_sampling, 
+            coupling=0.15, 
+            Nact=self.Nact+2,
+        )
+        self.Nsurf = self.inf_fun.shape[0]
+
+        y,x = (xp.indices((self.Nact, self.Nact)) - self.Nact//2 + 1/2)
+        r = xp.sqrt(x**2 + y**2)
+        self.dm_mask = r<(self.Nact/2 + 1/2)
+        self.Nacts = int(self.dm_mask.sum())
+
+        self.inf_fun_fft = xp.fft.fftshift(xp.fft.fft2(xp.fft.ifftshift(self.inf_fun,)))
+
+        xc = self.inf_sampling*(xp.linspace(-self.Nact//2, self.Nact//2-1, self.Nact) + 1/2) # DM command coordinates
+        yc = self.inf_sampling*(xp.linspace(-self.Nact//2, self.Nact//2-1, self.Nact) + 1/2)
+
+        fx = xp.fft.fftshift(xp.fft.fftfreq(self.Nsurf)) # Influence function frequncy sampling
+        fy = xp.fft.fftshift(xp.fft.fftfreq(self.Nsurf))
+
+        self.Mx = xp.exp(-1j*2*np.pi*xp.outer(fx,xc)) # forward DM model MFT matrices
+        self.My = xp.exp(-1j*2*np.pi*xp.outer(yc,fy))
+
         self.dm_ref = xp.zeros((self.Nact, self.Nact))
 
         ### INITIALIZE VORTEX PARAMETERS ###
@@ -120,19 +140,19 @@ class single():
         self.camlo_pxscl_lamD = self.camlo_pxscl_lamDc * (self.wavelength_c/wl).decompose().value
 
     def reset_dm(self):
-        self.set_dm(self.dm_ref)
+        self.set_dm(copy.copy(self.dm_ref))
 
     def zero_dm(self):
         self.set_dm(xp.zeros((self.Nact,self.Nact)))
     
     def set_dm(self, command):
-        self.DM.command = command
+        self.dm_command = command
         
     def add_dm(self, command):
-        self.DM.command += command
+        self.dm_command += command
         
     def get_dm(self):
-        return self.DM.command
+        return self.dm_command
 
     def use_llowfsc(self, use=True):
         if use:
@@ -178,31 +198,31 @@ class single():
 
         return post_vortex_pup_wf
 
-    def calc_wfs(self, save_wfs=True, plot=False): # method for getting the PSF in photons
-        wfs = []
-        wf = self.APERTURE.astype(complex)
-        if save_wfs: wfs.append(copy.copy(wf))
+    def calc_wfs(self, return_all=True, plot=False): # method for getting the PSF in photons
+        WFE = self.AMP * xp.exp(1j * 2*xp.pi/self.wavelength.to_value(u.m) * self.OPD )
+        E_EP =  self.APERTURE.astype(complex) * WFE
+        if plot: imshow2(xp.abs(E_EP), xp.angle(E_EP), 'EP WF', cmap2='twilight', npix=int(1.5*self.npix))
 
-        wf *= self.AMP * xp.exp(1j * 2*xp.pi/self.wavelength.to_value(u.m) * self.OPD )
-        if save_wfs: wfs.append(copy.copy(wf))
-        if plot: imshow2(xp.abs(wf), xp.angle(wf), 'EP WF', cmap2='twilight', npix=int(1.5*self.npix))
+        mft_command = self.Mx @ self.dm_command @ self.My
+        fourier_surf = self.inf_fun_fft * mft_command
+        dm_surf = xp.fft.fftshift( xp.fft.ifft2( xp.fft.ifftshift( fourier_surf, ))).real
+        DM_PHASOR = xp.exp(1j * 4*xp.pi/self.wavelength.to_value(u.m) * utils.pad_or_crop(dm_surf, self.N))
+        E_DM = E_EP * DM_PHASOR
+        if plot: imshow2(xp.abs(E_DM), xp.angle(E_DM), 'After DM WF', cmap2='twilight', npix=int(1.5*self.npix))
 
-        dm_surf = utils.pad_or_crop(self.DM.get_surface(), self.npix)
-        wf *= xp.exp(1j * 4*xp.pi/self.wavelength.to_value(u.m) * dm_surf)
-        if save_wfs: wfs.append(copy.copy(wf))
-        if plot: imshow2(xp.abs(wf), xp.angle(wf), 'After DM WF', cmap2='twilight', npix=int(1.5*self.npix))
-
-        if self.use_vortex: wf = self.apply_vortex(wf, plot=plot)
-        if save_wfs: wfs.append(copy.copy(wf))
+        if self.use_vortex: 
+            E_LP = self.apply_vortex(E_DM, plot=plot)
+        else: 
+            E_LP = copy.copy(E_DM)
+        if plot: imshow2(xp.abs(E_LP), xp.angle(E_LP), 'At Lyot Pupil WF', cmap2='twilight', npix=int(1.5*self.npix))
 
         if self.use_locam:
-            wf = props.ang_spec(wf, self.wavelength, -150*u.mm, self.lyot_pupil_diam/(self.npix*u.pix))
-            wf *= self.oap_ap
-            wf = props.ang_spec(wf, self.wavelength, 150*u.mm, self.lyot_pupil_diam/(self.npix*u.pix))
+            E_LP = props.ang_spec(E_LP, self.wavelength, -150*u.mm, self.lyot_pupil_diam/(self.npix*u.pix))
+            E_LP *= self.oap_ap
+            E_LP = props.ang_spec(E_LP, self.wavelength, 150*u.mm, self.lyot_pupil_diam/(self.npix*u.pix))
 
-            wf *= utils.pad_or_crop(self.LYOT, wf.shape[0]).astype(complex)
-            if save_wfs: wfs.append(copy.copy(wf))
-            if plot: imshow2(xp.abs(wf), xp.angle(wf), 'After Lyot Stop WF', cmap2='twilight')
+            E_RLS *= utils.pad_or_crop(self.LYOT, E_LP.shape[0]).astype(complex)
+            if plot: imshow2(xp.abs(E_RLS), xp.angle(E_RLS), 'After RLS WF', cmap2='twilight')
 
             # Use TF and MFT to propagate to defocused image
             self.llowfsc_fnum = self.llowfsc_fl.to_value(u.mm)/self.lyot_diam.to_value(u.mm)
@@ -212,26 +232,20 @@ class single():
                 self.wavelength.to_value(u.m), 
                 self.llowfsc_fnum,
             )
-            wf = props.mft_forward(tf*wf, self.npix*self.lyot_ratio, self.ncamlo, self.camlo_pxscl_lamD)
-            if plot: imshow2(xp.abs(wf)**2, xp.angle(wf), cmap2='twilight',)
-            if save_wfs: 
-                wfs.append(copy.copy(wf))
-                return wfs
-            else:
-                return wf
+            E_CAMLO = props.mft_forward(tf*E_RLS, self.npix*self.lyot_ratio, self.ncamlo, self.camlo_pxscl_lamD)
+            if plot: imshow2(xp.abs(E_CAMLO)**2, xp.angle(E_CAMLO), cmap2='twilight',)
+            return E_CAMLO
             
-        wf *= utils.pad_or_crop(self.LYOT, wf.shape[0]).astype(complex)
-        if save_wfs: wfs.append(copy.copy(wf))
-        if plot: imshow2(xp.abs(wf), xp.angle(wf), 'After Lyot Stop WF', cmap2='twilight', npix=int(1.5*self.npix))
+        E_LS = E_LP * utils.pad_or_crop(self.LYOT, E_LP.shape[0]).astype(complex)
+        if plot: imshow2(xp.abs(E_LS), xp.angle(E_LS), 'After Lyot Stop WF', cmap2='twilight', npix=int(1.5*self.npix))
 
-        wf = props.mft_forward(wf, self.npix*self.lyot_ratio, self.ncamsci, self.camsci_pxscl_lamD)
-        if save_wfs: wfs.append(copy.copy(wf))
-        if plot: imshow2(xp.abs(wf)**2, xp.angle(wf), 'Image Plane WF', cmap2='twilight',)
+        E_CAMSCI = props.mft_forward(E_LS, self.npix*self.lyot_ratio, self.ncamsci, self.camsci_pxscl_lamD)
+        if plot: imshow2(xp.abs(E_CAMSCI)**2, xp.angle(E_CAMSCI), 'CAMSCI WF', lognorm1=1, cmap2='twilight',)
 
-        if save_wfs:
-            return wfs
+        if return_all:
+            return E_EP, E_DM, E_LP, E_LS, E_CAMSCI
         else:
-            return wf
+            return E_CAMSCI
     
     def calc_wf(self):
         self.use_llowfsc(False)

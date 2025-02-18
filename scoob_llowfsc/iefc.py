@@ -19,10 +19,10 @@ def measure_probes(I, probe_cube, probe_amplitude, pca_modes=None, plot=False):
         probe = probe_cube[i]
 
         I.add_dm(probe_amplitude * probe) # add positive probe
-        im_pos = I.snap()
+        im_pos = I.snap_camsci()
         I.add_dm(-probe_amplitude * probe) # remove positive probe
         I.add_dm(-probe_amplitude * probe) # add negative probe
-        im_neg = I.snap()
+        im_neg = I.snap_camsci()
         I.add_dm(probe_amplitude*probe) # remove negative probe
 
         diff_ims.append((im_pos - im_neg) / (2 * probe_amplitude))
@@ -49,53 +49,54 @@ def calibrate(
 
     Nprobes = probe_modes.shape[0]
     Nmodes = calibration_modes.shape[0]
-
+    Nmask = control_mask.sum()
+    print(Nmask)
     scale_factors = [1]*Nmodes if scale_factors is None else scale_factors
 
     calib_amps = []
-    response_matrix = []
-    response_cube = []
-    
+    response_matrix = xp.zeros((int(Nprobes*Nmask), Nmodes))
+    response_cube = xp.zeros((Nmodes, Nprobes, I.ncamsci, I.ncamsci))
+
     # Loop through all modes that you want to control
     start = time.time()
-    for ci, calibration_mode in enumerate(calibration_modes):
-        response = 0
-    
-        dm_mode = calibration_mode.reshape(I.Nact, I.Nact)
-        calib_amp = calibration_amplitude * scale_factors[ci]
+    for i, calib_mode in enumerate(calibration_modes):
+        calib_amp = calibration_amplitude * scale_factors[i]
         calib_amps.append(calib_amp)
 
-        I.add_dm(calib_amp * dm_mode) # add positive calibration mode
+        I.add_dm(calib_amp * calib_mode) # add positive calibration mode
         pos_diff_ims = measure_probes(I, probe_modes, probe_amplitude)
-        I.add_dm(-calib_amp * dm_mode) # remove positive calibration mode
+        I.add_dm(-calib_amp * calib_mode) # remove positive calibration mode
 
-        I.add_dm(-calib_amp * dm_mode) # add negative calibration mode
+        I.add_dm(-calib_amp * calib_mode) # add negative calibration mode
         neg_diff_ims = measure_probes(I, probe_modes, probe_amplitude)
-        I.add_dm(-calib_amp * dm_mode) # remove positive calibration mode
+        I.add_dm(-calib_amp * calib_mode) # remove positive calibration mode
         
         response = (pos_diff_ims - neg_diff_ims) / (2*calib_amp)
-        
-        if probe_modes.shape[0]==2:
-            response_matrix.append( xp.concatenate([response[0, control_mask.ravel()],
-                                                    response[1, control_mask.ravel()]]) )
-        elif probe_modes.shape[0]==3: # if 3 probes are being used
-            response_matrix.append( xp.concatenate([response[0, control_mask.ravel()], 
-                                                    response[1, control_mask.ravel()],
-                                                    response[2, control_mask.ravel()]]) )
-        
-        response_cube.append(response)
-        print(f"\tCalibrated mode {ci+1:d}/{calibration_modes.shape[0]:d} in {time.time()-start:.3f}s", end='')
+
+        # print(response.shape)
+        # print(response[:, control_mask].ravel().shape)
+        response_matrix[:,i] = copy.copy(response[:, control_mask].ravel())
+        response_cube[i] = copy.copy(response)
+
+        print(f"\tCalibrated mode {i+1:d}/{calibration_modes.shape[0]:d} in {time.time()-start:.3f}s", end='')
         print("\r", end="")
 
-    response_matrix = xp.array(response_matrix).T # this is the response matrix to be inverted
-    response_cube = xp.array(response_cube)
+    # response_matrix = xp.array(response_matrix).T # this is the response matrix to be inverted
+    # response_cube = xp.array(response_cube)
 
     print('\nCalibration complete.')
     
     if plot_responses:
         dm_response_map = xp.sqrt(xp.mean(xp.square(response_matrix.dot(calibration_modes.reshape(Nmodes, -1))), axis=0))
         dm_response_map = dm_response_map.reshape(I.Nact,I.Nact) / xp.max(dm_response_map)
-        imshow1(dm_response_map, 'DM RMS Actuator Responses', lognorm=True, vmin=1e-2)
+
+        fp_response_map = xp.sqrt( xp.mean( xp.abs(response_cube), axis=(0,1))).reshape(I.ncamsci, I.ncamsci)
+        imshow3(
+            dm_response_map, fp_response_map, fp_response_map*control_mask,
+            'DM RMS Actuator Responses', 'Focal Plane RMS Responses', 
+            lognorm1=True, vmin1=1e-2,
+            pxscl2=I.camsci_pxscl_lamDc, pxscl3=I.camsci_pxscl_lamDc,
+        )
            
     return response_matrix, xp.array(response_cube)
     

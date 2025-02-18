@@ -17,7 +17,6 @@ def calibrate_without_fsm(
         dm_modes, 
         control_mask, 
         amps=3e-9, 
-        NFRAMES=10, 
         plot=False,
     ):
     

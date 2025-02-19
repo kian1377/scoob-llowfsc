@@ -114,6 +114,7 @@ def run(
         leakage=0.0,
         plot=False, 
         plot_all=False,
+        camsci_vmin=1e-9,
         sleep=None, 
     ):
     print(f'Starting LLOWFSC control-loop simulation')
@@ -160,7 +161,7 @@ def run(
                 camlo_im, control_mask*del_im, camsci_im, 
                 'LLOWFSC Image', 'Difference Image',
                 cmap1='magma', cmap2='magma',
-                lognorm3=True, vmin3=1e-9, 
+                lognorm3=True, vmin3=camsci_vmin, 
             )
             rms_wfe = xp.sqrt(xp.mean(xp.square( new_opd[M.BAP_MASK] )))
             vmax_pup = 2*rms_wfe

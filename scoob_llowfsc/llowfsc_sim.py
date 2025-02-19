@@ -103,6 +103,7 @@ def run(
         M, 
         static_amp, static_opd, 
         ref_im, 
+        ref_offset,
         control_mask, 
         control_matrix, 
         wfe_time_series, 
@@ -117,11 +118,12 @@ def run(
     ):
     print(f'Starting LLOWFSC control-loop simulation')
 
-    Nitr = wfe_time_series.shape[1]
+    Nitr = wfe_time_series.shape[1] - 1
     camlo_ims = xp.zeros((Nitr, M.ncamlo, M.ncamlo))
     diff_ims = xp.zeros((Nitr, M.ncamlo, M.ncamlo))
     camsci_ims = xp.zeros((Nitr, M.ncamsci, M.ncamsci))
     lo_commands = xp.zeros((Nitr, M.Nact, M.Nact))
+    del_commands = xp.zeros((Nitr, M.Nact, M.Nact))
     injected_wfes = xp.zeros((Nitr, wfe_time_series[:, 0].shape[0]))
     
     # Apply the very first OPD in the time series
@@ -129,24 +131,26 @@ def run(
     M.PREFPM_AMP = static_amp
     M.PREFPM_OPD = static_opd + new_opd
 
-    for i in range(1, Nitr):
+    start = time.time()
+    for i in range(Nitr):
+        # compute CAMLO image and the DM command with the new OPD applied
         camlo_im = M.snap_camlo()
-        camsci_im = M.snap_camsci()
-        del_im = camlo_im - ref_im
-
-        # compute the DM command with the image based on the time delayed wavefront
+        del_im = camlo_im - (ref_im + ref_offset)
         modal_coeff = - gain * control_matrix.dot(del_im[control_mask])
         del_dm_command = xp.sum( modal_coeff[:, None, None] * dm_modes, axis=0)
         total_lo_dm = (1 - leakage) * M.get_dm(channel) + del_dm_command
         M.set_dm(total_lo_dm, channel)
 
         # Apply the very first OPD in the time series
-        new_opd = xp.sum( wfe_time_series[:, i, None, None] * wfe_modes, axis=0)
+        new_opd = xp.sum( wfe_time_series[:, i+1, None, None] * wfe_modes, axis=0)
         M.PREFPM_OPD = static_opd + new_opd
+
+        camsci_im = M.snap_camsci() # CAMSCI image is computed after applying the updated the OPD to simulate lag
 
         camlo_ims[i] = copy.copy(camlo_im)
         diff_ims[i] = copy.copy(del_im)
         camsci_ims[i] = copy.copy(camsci_im)
+        del_commands[i] = copy.copy(del_dm_command)
         lo_commands[i] = copy.copy(total_lo_dm)
         injected_wfes[i] = copy.copy(wfe_time_series[:, i])
 
@@ -170,15 +174,22 @@ def run(
             )
             
             if not plot_all: clear_output(wait=True)
+        else:
+            print(f"\tIteration {i+1:d}/{Nitr:d} completed in {time.time()-start:.3f}s", end='')
+            print("\r", end="")
+    print('\nLLOWFSC simulation complete.')
 
     sim_dict = {
-        'llowfsc_ims':camlo_ims,
+        'camlo_ims':camlo_ims,
         'diff_ims':diff_ims, 
         'injected_wfes':injected_wfes,
-        'llowfsc_ref':ref_im,
+        'camlo_ref_im':ref_im,
+        'camlo_ref_offset':ref_offset,
         'wfe_modes':wfe_modes, 
-        'coro_ims':camsci_ims,
+        'camsci_ims':camsci_ims,
+        'del_commands': del_commands,
         'lo_commands':lo_commands,
+        'llowfsc_mask':control_mask,
     }
     
     return sim_dict

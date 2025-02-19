@@ -67,7 +67,7 @@ def calibrate_without_fsm(
 
     return response_matrix, response_cube
 
-def make_shear_chops(ref_locam_im, shear_pix=1, order=3, central_diff=False, plot=False):
+def make_shear_chops(ref_locam_im, control_mask, shear_pix=1, order=3, central_diff=False, plot=False):
     nlocam = ref_locam_im.shape[0]
     shear_chops = xp.zeros((2, nlocam, nlocam))
     if central_diff:
@@ -82,6 +82,7 @@ def make_shear_chops(ref_locam_im, shear_pix=1, order=3, central_diff=False, plo
     else:
         shear_chops[0] = ( xcipy.ndimage.shift(ref_locam_im, (0,shear_pix), order=order) - ref_locam_im ) / shear_pix
         shear_chops[1] = ( xcipy.ndimage.shift(ref_locam_im, (shear_pix,0), order=order) - ref_locam_im ) / shear_pix
+    shear_chops[:] *= control_mask
     if plot: imshow2(shear_chops[0], shear_chops[1])
     return shear_chops
 

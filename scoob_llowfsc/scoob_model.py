@@ -201,10 +201,11 @@ class single():
         pupil_wf_lres = props.ifft(fp_wf_lres)
         # pupil_wf_lres = utils.pad_or_crop(pupil_wf_lres, self.N,)
         if plot: 
-            imshow2(xp.abs(pupil_wf_lres), xp.angle(pupil_wf_lres), 
-                            'FFT Lyot Pupil Amplitude', 'FFT Lyot Pupil Phase', 
-                            npix=int(self.plot_oversample*self.npix), cmap2='twilight', 
-                            )
+            imshow2(
+                xp.abs(pupil_wf_lres), xp.angle(pupil_wf_lres), 
+                'FFT Lyot Pupil Amplitude', 'FFT Lyot Pupil Phase', 
+                npix=int(self.plot_oversample*self.npix), cmap2='twilight', 
+            )
 
         fp_wf_hres = props.mft_forward(pupwf, self.npix, self.N_vortex_hres, self.hres_sampling, convention='-')
         fp_wf_hres *= self.vortex_hres * self.hres_window * self.hres_dot_mask # apply high res (windowed) FPM

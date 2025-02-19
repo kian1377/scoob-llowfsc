@@ -117,7 +117,9 @@ class single():
         self.My_back = xp.exp(1j*2*np.pi*xp.outer(fy,yc))
 
         self.dm_ref = copy.copy(dm_ref)
-        self.dm_command = copy.copy(dm_ref)
+        self.dm_channels = xp.zeros((10,34,34))
+        self.dm_channels[0] = self.dm_ref
+        self.dm_total = xp.sum(self.dm_channels, axis=0)
 
         ### INITIALIZE VORTEX PARAMETERS ###
         self.oversample_vortex = 4.096
@@ -161,22 +163,31 @@ class single():
         self.camlo_pxscl_lamD = self.camlo_pxscl_lamDc * (self.wavelength_c/wl).decompose().value
 
     def reset_dm(self):
-        self.set_dm(copy.copy(self.dm_ref))
+        self.dm_channels = xp.zeros((10,34,34))
+        self.dm_channels[0] = self.dm_ref
+        self.dm_total = xp.sum(self.dm_channels, axis=0)
 
-    def zero_dm(self):
-        self.set_dm(xp.zeros((self.Nact,self.Nact)))
-    
-    def set_dm(self, command):
-        self.dm_command = copy.copy(command)
-        
-    def add_dm(self, command):
-        self.dm_command += copy.copy( command )
-        
-    def get_dm(self):
-        return copy.copy( self.dm_command )
+    def zero_dm(self, channel=1):
+        self.dm_channels[channel] = xp.zeros((34,34))
+        self.dm_total = xp.sum(self.dm_channels, axis=0)
+
+    def set_dm(self, command, channel=1):
+        self.dm_channels[channel] = copy.copy(command)
+        self.dm_total = xp.sum(self.dm_channels, axis=0)
+
+    def add_dm(self, command, channel=1):
+        old = self.dm_channels[channel]
+        self.dm_channels[channel] = copy.copy(old + command)
+        self.dm_total = xp.sum(self.dm_channels, axis=0)
+
+    def get_dm(self, channel=1):
+        return copy.copy(self.dm_channels[channel])
+
+    def get_dm_total(self):
+        return self.dm_total
 
     def compute_dm_phasor(self):
-        mft_command = self.Mx @ self.dm_command @ self.My
+        mft_command = self.Mx @ self.dm_total @ self.My
         fourier_surf = self.inf_fun_fft * mft_command
         dm_surf = xp.fft.fftshift( xp.fft.ifft2( xp.fft.ifftshift( fourier_surf, ))).real
         dm_phasor = xp.exp(1j * 4*xp.pi/self.wavelength.to_value(u.m) * dm_surf )

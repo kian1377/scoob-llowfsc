@@ -26,6 +26,7 @@ class single():
         self.lyot_diam = 8.6*u.mm
         self.lyot_ratio = (self.lyot_diam/self.lyot_pupil_diam).decompose().value
         self.rls_diam = 25.4*u.mm
+        self.d_oap_ls = 150*u.mm
         self.imaging_fl = 140*u.mm
         self.llowfsc_fl = 200*u.mm
         self.llowfsc_fnum = self.llowfsc_fl.to_value(u.mm)/self.lyot_diam.to_value(u.mm)
@@ -42,7 +43,7 @@ class single():
         
         self.npix = 1000
         self.def_oversample = 2.048 # default oversample
-        self.rls_oversample = 4.096 # reflective lyot stop oversample
+        self.rls_oversample = 3 # reflective lyot stop oversample
         self.Ndef = int(self.npix*self.def_oversample)
         self.Nrls = int(self.npix*self.rls_oversample)
         self.ncamsci = 150
@@ -51,13 +52,15 @@ class single():
         ### INITIALIZE APERTURES ###
         self.npix_rls = int( np.round( self.npix * self.rls_diam.to_value(u.mm) / self.lyot_pupil_diam.to_value(u.mm) ))
         pwf = poppy.FresnelWavefront(beam_radius=self.dm_beam_diam/2, npix=self.npix, oversample=1)
-        rls_wf = poppy.FresnelWavefront(beam_radius=self.dm_beam_diam/2, npix=self.npix, oversample=self.rls_oversample)
         self.APERTURE = poppy.CircularAperture(radius=self.dm_beam_diam/2).get_transmission(pwf)
         self.LYOTSTOP = poppy.CircularAperture(radius=self.lyot_diam/2).get_transmission(pwf)
-        rls_ap = poppy.CircularAperture(radius=self.rls_diam/2).get_transmission(rls_wf)
+
+        pwf_rls = poppy.FresnelWavefront(beam_radius=self.dm_beam_diam/2, npix=self.npix, oversample=self.rls_oversample)
+        rls_ap = poppy.CircularAperture(radius=self.rls_diam/2).get_transmission(pwf_rls)
         self.RLS = rls_ap - utils.pad_or_crop( self.LYOTSTOP, self.Nrls)
         rls_ap = 0
-        self.OAP_AP = poppy.CircularAperture(radius=15*u.mm/2).get_transmission(rls_wf)
+
+        self.OAP_AP = poppy.CircularAperture(radius=15*u.mm/2).get_transmission(pwf_rls)
         self.use_camlo = False
 
         self.LYOT = self.LYOTSTOP
@@ -195,11 +198,13 @@ class single():
         return dm_phasor
 
     def apply_vortex(self, pupwf, plot=False):
+        N = pupwf.shape[0]
+
         lres_wf = utils.pad_or_crop(pupwf, self.N_vortex_lres) # pad to the larger array for the low res propagation
         fp_wf_lres = props.fft(lres_wf)
         fp_wf_lres *= self.vortex_lres * (1 - self.lres_window) # apply low res (windowed) FPM
         pupil_wf_lres = props.ifft(fp_wf_lres)
-        # pupil_wf_lres = utils.pad_or_crop(pupil_wf_lres, self.N,)
+        pupil_wf_lres = utils.pad_or_crop(pupil_wf_lres, N) # crop to the desired wavefront dimension
         if plot: 
             imshow2(
                 xp.abs(pupil_wf_lres), xp.angle(pupil_wf_lres), 
@@ -209,7 +214,7 @@ class single():
 
         fp_wf_hres = props.mft_forward(pupwf, self.npix, self.N_vortex_hres, self.hres_sampling, convention='-')
         fp_wf_hres *= self.vortex_hres * self.hres_window * self.hres_dot_mask # apply high res (windowed) FPM
-        pupil_wf_hres = props.mft_reverse(fp_wf_hres, self.hres_sampling, self.npix, self.N_vortex_lres, convention='+')
+        pupil_wf_hres = props.mft_reverse(fp_wf_hres, self.hres_sampling, self.npix, N, convention='+')
         if plot: 
             imshow2(
                 xp.abs(pupil_wf_hres), xp.angle(pupil_wf_hres), 
@@ -236,6 +241,7 @@ class single():
         DM_PHASOR = self.compute_dm_phasor()
         E_DM = E_EP * DM_PHASOR
         if plot: imshow2(xp.abs(E_DM), xp.angle(E_DM), 'After DM WF', cmap2='twilight', npix=int(self.plot_oversample*self.npix))
+        # print(E_DM.shape)
 
         if self.use_vortex: 
             E_LP = self.apply_vortex(E_DM, plot=plot)
@@ -267,22 +273,27 @@ class single():
         DM_PHASOR = self.compute_dm_phasor()
         E_DM = E_EP * DM_PHASOR
         if plot: imshow2(xp.abs(E_DM), xp.angle(E_DM), 'After DM WF', cmap2='twilight', npix=int(self.plot_oversample*self.npix))
-
+        
         if self.use_vortex: 
+            E_DM = utils.pad_or_crop(E_DM, self.Nrls)
             E_LP = self.apply_vortex(E_DM, plot=plot)
         else: 
             E_LP = copy.copy(E_DM)
         # print(E_LP.shape)
 
-        E_LP = props.ang_spec(E_LP, self.wavelength, -150*u.mm, self.lyot_pupil_diam/(self.npix*u.pix))
+        E_LP = props.ang_spec(E_LP, self.wavelength, -self.d_oap_ls, self.lyot_pupil_diam/(self.npix*u.pix))
+        if plot: imshow2(xp.abs(E_LP), xp.angle(E_LP), 'Back Prop to OAP WF', cmap2='twilight', npix=int(self.plot_oversample*self.npix))
         E_LP *= utils.pad_or_crop(self.OAP_AP, E_LP.shape[0])
-        E_LP = props.ang_spec(E_LP, self.wavelength, 150*u.mm, self.lyot_pupil_diam/(self.npix*u.pix))
+        if plot: imshow2(xp.abs(E_LP), xp.angle(E_LP), 'After OAP Aperture WF', cmap2='twilight', npix=int(self.plot_oversample*self.npix))
+        E_LP = props.ang_spec(E_LP, self.wavelength, self.d_oap_ls, self.lyot_pupil_diam/(self.npix*u.pix))
+        if plot: imshow2(xp.abs(E_LP), xp.angle(E_LP), 'Back to Lyot Pupil WF', cmap2='twilight', npix=int(self.plot_oversample*self.npix))
+        
         RLS_WFE = self.RLS_AMP * xp.exp(1j * 2*xp.pi/self.wavelength.to_value(u.m) * self.RLS_OPD )
-        E_LP =  E_LP * utils.pad_or_crop(RLS_WFE, E_LP.shape[0])
-        if plot: imshow2(xp.abs(E_LP), xp.angle(E_LP), 'At RLS WF', cmap2='twilight', npix=int(self.plot_oversample*self.npix))
+        E_RLS =  E_LP * utils.pad_or_crop(self.RLS, E_LP.shape[0]).astype(complex) * utils.pad_or_crop(RLS_WFE, E_LP.shape[0])
+        if plot: imshow2(xp.abs(E_RLS), xp.angle(E_RLS), 'At RLS WF', cmap2='twilight', npix=int(self.plot_oversample*self.npix))
 
-        E_RLS = E_LP * utils.pad_or_crop(self.RLS, E_LP.shape[0]).astype(complex)
-        if plot: imshow2(xp.abs(E_RLS), xp.angle(E_RLS), 'After RLS WF', cmap2='twilight')
+        # E_RLS = E_LP * utils.pad_or_crop(self.RLS, E_LP.shape[0]).astype(complex)
+        # if plot: imshow2(xp.abs(E_RLS), xp.angle(E_RLS), 'After RLS WF', cmap2='twilight')
 
         # Use TF and MFT to propagate to defocused image
         self.llowfsc_fnum = self.llowfsc_fl.to_value(u.mm)/self.lyot_diam.to_value(u.mm)

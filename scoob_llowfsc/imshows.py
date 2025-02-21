@@ -352,5 +352,99 @@ def plot_data_with_ref(
     ax[2].set_position([0.525, 0, 0.3, w])
 
     if fname is not None: fig.savefig(fname, format='pdf', bbox_inches="tight")
+
+import matplotlib.pyplot as plt
+from matplotlib.gridspec import GridSpec
+from matplotlib.colors import LogNorm
+
+def plot_howfsc(
+        data, 
+        dm_flat, 
+        im1vmin=1e-9, im1vmax=1e-4,
+        im2vmin=1e-9, im2vmax=1e-4, 
+        vmin=1e-9, vmax=1e-4, 
+        xticks=None,
+        title_fz = 16,
+        plot_position=[0.6, 0.3, 0.4, 0.4],
+        exp_name='',
+        hspace=None, wspace=None, 
+        figsize=(20,15), 
+        dpi=125,
+        fname=None,
+    ):
+    flat_command = ensure_np_array(dm_flat)
+    ims = ensure_np_array( xp.array(data['images']) ) 
+    control_mask = ensure_np_array( data['control_mask'] )
+
+    # print(type(control_mask))
+    Nitr = ims.shape[0]
+    npsf = ims.shape[1]
+    psf_pixelscale_lamD = data['pixelscale']
+    ext = psf_pixelscale_lamD*npsf/2
+    extent = [-ext, ext, -ext, ext]
+
+    mean_nis = np.mean(ims[:,control_mask], axis=1)
+    ibest = np.argmin(mean_nis)
+    ref_im = ensure_np_array(data['images'][0])
+    best_im = ensure_np_array(data['images'][ibest])
+    best_command = ensure_np_array(data['commands'][ibest-1])
+
+    fig = plt.figure(figsize=figsize, dpi=dpi)
+    gs = GridSpec(2, 3, figure=fig)
+
+    ax = fig.add_subplot(gs[0, 0])
+    im = ax.imshow(flat_command, cmap='viridis')
+    ax.set_title('DM Flat Command', fontsize=title_fz)
+    # ax.set_xticks([])
+    # ax.set_yticks([])
+    divider = make_axes_locatable(ax)
+    cax = divider.append_axes("right", size="4%", pad=0.075)
+    cbar = fig.colorbar(im, cax=cax)
+    cbar.ax.set_ylabel('m', rotation=0, labelpad=7)
+
+    ax = fig.add_subplot(gs[0, 1])
+    im = ax.imshow(best_command, cmap='viridis',)
+    ax.set_title('Best HOWFSC Command', fontsize=title_fz)
+    # ax.set_xticks([])
+    # ax.set_yticks([])
+    divider = make_axes_locatable(ax)
+    cax = divider.append_axes("right", size="4%", pad=0.075)
+    cbar = fig.colorbar(im, cax=cax)
+    cbar.ax.set_ylabel('m', rotation=0, labelpad=7)
+
+    ax = fig.add_subplot(gs[1, 0])
+    im = ax.imshow(ref_im, norm=LogNorm(vmax=im1vmax, vmin=im1vmin), cmap='magma', extent=extent)
+    ax.set_title(f'Initial Image:\nMean Contrast = {mean_nis[0]:.2e}', fontsize=title_fz)
+    ax.set_ylabel('Y [$\lambda/D$]', fontsize=12, labelpad=-5)
+    ax.set_xlabel('X [$\lambda/D$]', fontsize=12, labelpad=5)
+    divider = make_axes_locatable(ax)
+    cax = divider.append_axes("right", size="4%", pad=0.075)
+    cbar = fig.colorbar(im, cax=cax)
+    cbar.ax.set_ylabel('NI', rotation=0, labelpad=7)
+
+    ax = fig.add_subplot(gs[1, 1])
+    im = ax.imshow(best_im, norm=LogNorm(vmax=im2vmax, vmin=im2vmin), cmap='magma', extent=extent)
+    ax.set_title('Best Iteration' + exp_name + f':\nMean Contrast = {mean_nis[ibest]:.2e}', fontsize=title_fz)
+    # ax.set_ylabel('Y [$\lambda/D$]', fontsize=12, labelpad=-5)
+    ax.set_xlabel('X [$\lambda/D$]', fontsize=12, labelpad=5)
+    divider = make_axes_locatable(ax)
+    cax = divider.append_axes("right", size="4%", pad=0.075)
+    cbar = fig.colorbar(im, cax=cax)
+    cbar.ax.set_ylabel('NI', rotation=0, labelpad=7)
+    
+    plt.subplots_adjust(wspace=wspace, hspace=hspace)
+
+    ax = fig.add_subplot(gs[:, 2])
+    ax.set_title('Mean Contrast per Iteration' + exp_name, fontsize=14)
+    ax.semilogy(mean_nis, label='3.6% Bandpass')
+    ax.grid()
+    ax.set_xlabel('Iteration Number', fontsize=12, )
+    ax.set_ylabel('Mean Contrast', fontsize=14, labelpad=1)
+    ax.set_ylim([vmin, vmax])
+    xticks = np.arange(0,Nitr,2) if xticks is None else xticks
+    ax.set_xticks(xticks)
+    ax.set_position(plot_position)    
+
+    if fname is not None: fig.savefig(fname, format='pdf', bbox_inches="tight")
     
     

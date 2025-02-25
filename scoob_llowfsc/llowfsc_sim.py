@@ -53,24 +53,24 @@ def calibrate_without_fsm(
 
     return response_matrix, response_cube
 
-def make_shear_chops(ref_locam_im, control_mask, shear_pix=1/2, order=3, central_diff=False, plot=False):
-    ncamlo = ref_locam_im.shape[0]
+def make_shear_chops(camlo_ref, control_mask, shear_pix=1/2, order=3, central_diff=False, plot=False):
+    ncamlo = camlo_ref.shape[0]
     shear_chops = xp.zeros((2, ncamlo, ncamlo))
     if central_diff:
-        shear_chops_x1 = ( xcipy.ndimage.shift(ref_locam_im, (0,shear_pix), order=order))
-        shear_chops_x2 = ( xcipy.ndimage.shift(ref_locam_im, (0,-shear_pix), order=order)) 
+        shear_chops_x1 = ( xcipy.ndimage.shift(camlo_ref, (0,shear_pix), order=order))
+        shear_chops_x2 = ( xcipy.ndimage.shift(camlo_ref, (0,-shear_pix), order=order)) 
         shear_chops[0] = ( shear_chops_x1 - shear_chops_x2 ) / (2*shear_pix)
 
-        shear_chops_y1 = ( xcipy.ndimage.shift(ref_locam_im, (shear_pix,0), order=order) )
-        shear_chops_y2 = ( xcipy.ndimage.shift(ref_locam_im, (-shear_pix,0), order=order))
+        shear_chops_y1 = ( xcipy.ndimage.shift(camlo_ref, (shear_pix,0), order=order) )
+        shear_chops_y2 = ( xcipy.ndimage.shift(camlo_ref, (-shear_pix,0), order=order))
         shear_chops[1] = ( shear_chops_y1 - shear_chops_y2 ) / (2*shear_pix)
 
     else:
-        shear_chops_x = ( xcipy.ndimage.shift(ref_locam_im, (0,shear_pix), order=order))
-        shear_chops_y = ( xcipy.ndimage.shift(ref_locam_im, (shear_pix,0), order=order))
+        shear_chops_x = ( xcipy.ndimage.shift(copy.copy(camlo_ref), (0,shear_pix), order=order))
+        shear_chops_y = ( xcipy.ndimage.shift(copy.copy(camlo_ref), (shear_pix,0), order=order))
 
-        shear_chops[0] = ( shear_chops_x - ref_locam_im ) / shear_pix
-        shear_chops[1] = ( shear_chops_y - ref_locam_im ) / shear_pix
+        shear_chops[0] = ( shear_chops_x - camlo_ref ) / shear_pix
+        shear_chops[1] = ( shear_chops_y - camlo_ref ) / shear_pix
     shear_chops[:] *= control_mask
     if plot: imshow2(shear_chops[0], shear_chops[1])
     return shear_chops

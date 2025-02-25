@@ -44,6 +44,7 @@ def calibrate(
         control_mask, 
         probe_amplitude, probe_modes, 
         calibration_amplitude, calibration_modes, 
+        channel=3,
         scale_factors=None, 
         plot_responses=False, 
     ):
@@ -69,7 +70,7 @@ def calibrate(
                 calib_amp = calibration_amplitude
 
             # Add the mode to the DMs
-            sysi.add_dm(s * calib_amp * dm_mode)
+            sysi.add_dm(s * calib_amp * dm_mode, channel=channel)
             
             # Compute reponse with difference images of probes
             diff_ims = take_measurement(sysi, probe_modes, probe_amplitude)
@@ -77,7 +78,7 @@ def calibrate(
             response += s * diff_ims.reshape(Nprobes, sysi.ncamsci**2) / (2 * calib_amp)
             
             # Remove the mode form the DMs
-            sysi.add_dm(-s * calib_amp * dm_mode) # remove the mode
+            sysi.add_dm(-s * calib_amp * dm_mode, channel=channel) # remove the mode
         
         print(f"\tCalibrated mode {ci+1:d}/{calibration_modes.shape[0]:d} in {time.time()-start:.3f}s", end='')
         print("\r", end="")

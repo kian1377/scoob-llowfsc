@@ -148,6 +148,7 @@ class single():
         # DETECTOR PARAMETERS
         self.CAMLO = None
         self.NCAMLO = 1
+        self.camlo_shear = None
 
     def getattr(self, attr):
         return getattr(self, attr)
@@ -304,6 +305,8 @@ class single():
             self.llowfsc_fnum,
         )
         E_CAMLO = props.mft_forward(camlo_tf*E_RLS, self.npix*self.lyot_ratio, self.ncamlo, self.camlo_pxscl_lamD)
+        if self.camlo_shear is not None: # shift the CAMLO image to simulate detector lateral shift
+            E_CAMLO = xcipy.ndimage.shift(E_CAMLO, (self.camlo_shear[1], self.camlo_shear[0]), order=3)
         if plot: imshow2(xp.abs(E_CAMLO)**2, xp.angle(E_CAMLO), cmap2='twilight',)
             
         if return_all:

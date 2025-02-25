@@ -72,8 +72,9 @@ def make_shear_chops(camlo_ref, control_mask, shear_pix=1/2, order=3, central_di
         shear_chops[0] = ( shear_chops_x - camlo_ref ) / shear_pix
         shear_chops[1] = ( shear_chops_y - camlo_ref ) / shear_pix
     shear_chops[:] *= control_mask
+    shear_responses = shear_chops[:, control_mask].T
     if plot: imshow2(shear_chops[0], shear_chops[1])
-    return shear_chops
+    return shear_responses, shear_chops
 
 import matplotlib.pyplot as plt
 from matplotlib.gridspec import GridSpec

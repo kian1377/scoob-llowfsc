@@ -21,6 +21,7 @@ class single():
         
         self.wavelength_c = 633e-9*u.m
         self.total_pupil_diam = 2.4 * u.m # assumed total telescope diameter
+        self.fsm_beam_diam = 7.1*u.mm
         self.dm_beam_diam = 9.1*u.mm # as measured in the Fresnel model
         self.lyot_pupil_diam = 9.1*u.mm
         self.lyot_diam = 8.6*u.mm
@@ -48,6 +49,9 @@ class single():
         self.Nrls = int(self.npix*self.rls_oversample)
         self.ncamsci = 150
         self.ncamlo = 96
+
+        self.tt_pv_to_rms = 1/4
+        self.as_per_radian = 206265
 
         ### INITIALIZE APERTURES ###
         self.npix_rls = int( np.round( self.npix * self.rls_diam.to_value(u.mm) / self.lyot_pupil_diam.to_value(u.mm) ))
@@ -78,6 +82,10 @@ class single():
 
         self.RLS_AMP = xp.ones((self.npix,self.npix))
         self.RLS_OPD = xp.zeros((self.npix,self.npix))
+
+        self.PTT_MODES = utils.create_zernike_modes(self.APERTURE, nmodes=3, remove_modes=0) # define tip/tilt modes
+        self.FSM_PTT = np.zeros(3) # [OPD in m, arcsec, arcsec]
+        self.FSM_OPD = 0*self.PTT_MODES[0]
 
         # Initialize flux and normalization params
         self.Imax_ref = 1
@@ -166,6 +174,32 @@ class single():
         self.camsci_pxscl_lamD = self.camsci_pxscl_lamDc * (self.wavelength_c/wl).decompose().value
         self.camlo_pxscl_lamD = self.camlo_pxscl_lamDc * (self.wavelength_c/wl).decompose().value
 
+    def zero_fsm(self,):
+        self.FSM_PTT = np.array([0,0,0])
+        self.FSM_OPD = 0*self.PTT_MODES[0]
+
+    def set_fsm(self, ptt):
+        self.FSM_PTT = ptt
+        
+        tip_at_pupil_pv = np.tan(self.FSM_PTT[1]/self.as_per_radian) * self.fsm_beam_diam.to_value(u.m)
+        tilt_at_pupil_pv = np.tan(self.FSM_PTT[2]/self.as_per_radian) * self.fsm_beam_diam.to_value(u.m)
+
+        tip_at_pupil_rms = tip_at_pupil_pv * self.tt_pv_to_rms
+        tilt_at_pupil_rms = tilt_at_pupil_pv * self.tt_pv_to_rms
+
+        self.FSM_OPD = self.FSM_PTT[0]*self.PTT_MODES[0] + tip_at_pupil_rms*self.PTT_MODES[1] + tilt_at_pupil_rms*self.PTT_MODES[2]
+
+    def add_fsm(self, ptt):
+        self.FSM_PTT = self.FSM_PTT + ptt
+
+        tip_at_pupil_pv = np.tan(self.FSM_PTT[1]/self.as_per_radian) * self.fsm_beam_diam.to_value(u.m)
+        tilt_at_pupil_pv = np.tan(self.FSM_PTT[2]/self.as_per_radian) * self.fsm_beam_diam.to_value(u.m)
+
+        tip_at_pupil_rms = tip_at_pupil_pv * self.tt_pv_to_rms
+        tilt_at_pupil_rms = tilt_at_pupil_pv * self.tt_pv_to_rms
+
+        self.FSM_OPD = self.FSM_PTT[0]*self.PTT_MODES[0] + tip_at_pupil_rms*self.PTT_MODES[1] + tilt_at_pupil_rms*self.PTT_MODES[2]
+
     def reset_dm(self):
         self.dm_channels = xp.zeros((10,34,34))
         self.dm_channels[0] = self.dm_ref
@@ -234,8 +268,9 @@ class single():
         return post_vortex_pup_wf
 
     def calc_wfs_camsci(self, return_all=True, plot=False): # method for getting the PSF in photons
+        FSM_PHASOR = xp.exp(1j * 4*xp.pi/self.wavelength.to_value(u.m) * self.FSM_OPD )
         PREFPM_WFE = self.PREFPM_AMP * xp.exp(1j * 2*xp.pi/self.wavelength.to_value(u.m) * self.PREFPM_OPD )
-        E_EP =  self.APERTURE.astype(complex) * PREFPM_WFE
+        E_EP =  self.APERTURE.astype(complex) * PREFPM_WFE * FSM_PHASOR
         E_EP = utils.pad_or_crop(E_EP, self.N)
         if plot: imshow2(xp.abs(E_EP), xp.angle(E_EP), 'EP WF', cmap2='twilight', npix=int(self.plot_oversample*self.npix))
 
@@ -266,8 +301,9 @@ class single():
             return E_CAMSCI
     
     def calc_wfs_camlo(self, return_all=True, plot=False): # method for getting the PSF in photons
+        FSM_PHASOR = xp.exp(1j * 4*xp.pi/self.wavelength.to_value(u.m) * self.FSM_OPD )
         PREFPM_WFE = self.PREFPM_AMP * xp.exp(1j * 2*xp.pi/self.wavelength.to_value(u.m) * self.PREFPM_OPD )
-        E_EP =  self.APERTURE.astype(complex) * PREFPM_WFE
+        E_EP =  self.APERTURE.astype(complex) * PREFPM_WFE * FSM_PHASOR
         E_EP = utils.pad_or_crop(E_EP, self.N)
         if plot: imshow2(xp.abs(E_EP), xp.angle(E_EP), 'EP WF', cmap2='twilight', npix=int(self.plot_oversample*self.npix))
 

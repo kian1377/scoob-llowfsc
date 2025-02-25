@@ -53,6 +53,67 @@ def calibrate_without_fsm(
 
     return response_matrix, response_cube
 
+def calibrate_with_fsm(
+        M, 
+        dm_modes, 
+        control_mask, 
+        channel=2,
+        amps=3e-9, 
+        plot=False,
+    ):
+    
+    Nmask = int(control_mask.sum())
+    Nmodes = dm_modes.shape[0] + 2
+    if np.isscalar(amps):
+        amps = [amps] * Nmodes
+
+    responses = xp.zeros((Nmodes, Nmask))
+    response_cube = xp.zeros((Nmodes, M.ncamlo, M.ncamlo))
+    
+    start = time.time()
+
+    for i in range(Nmodes):
+        amp = amps[i]
+
+        if i==0:
+            mode = M.PTT_MODES[1]
+            amp_pv = amp / M.tt_pv_to_rms
+            amp_as = np.arctan(amp_pv / M.fsm_beam_diam.to_value(u.m)) * 206265 # radians * arcsec/radian
+            M.add_fsm(xp.array([0, amp_as, 0]))
+            im_pos = M.snap_camlo()
+            M.add_fsm(xp.array([0, -2*amp_as, 0]))
+            im_neg = M.snap_camlo()
+            M.add_fsm(xp.array([0, amp_as, 0]))
+        elif i==1:
+            mode = M.PTT_MODES[2]
+            amp_pv = amp / M.tt_pv_to_rms
+            amp_as = np.arctan(amp_pv / M.fsm_beam_diam.to_value(u.m)) * 206265 # radians * arcsec/radian
+            M.add_fsm(xp.array([0, 0, amp_as]))
+            im_pos = M.snap_camlo()
+            M.add_fsm(xp.array([0, 0, -2*amp_as]))
+            im_neg = M.snap_camlo()
+            M.add_fsm(xp.array([0, 0, amp_as]))
+        else:
+            mode = dm_modes[i]
+            M.add_dm(amp*mode, channel=channel)
+            im_pos = M.snap_camlo()
+            M.add_dm(-2*amp*mode, channel=channel)
+            im_neg = M.snap_camlo()
+            M.add_dm(amp*mode, channel=channel)
+
+        diff = im_pos - im_neg
+        response_cube[i] = copy.copy(diff) / (2 * amp)
+        responses[i] = copy.copy(diff)[control_mask] / (2 * amp)
+        
+        if plot: imshow3(amp*mode, im_pos, diff, f'Mode {i+1}', 'Absolute Image', 'Difference', cmap1='viridis')
+        
+        print(f"\tCalibrated mode {i+1:d}/{dm_modes.shape[0]:d} in {time.time()-start:.3f}s", end='')
+        print("\r", end="")
+
+    response_matrix = responses.T
+
+    return response_matrix, response_cube
+
 def make_shear_chops(camlo_ref, control_mask, shear_pix=1/2, order=3, central_diff=False, plot=False):
     ncamlo = camlo_ref.shape[0]
     shear_chops = xp.zeros((2, ncamlo, ncamlo))

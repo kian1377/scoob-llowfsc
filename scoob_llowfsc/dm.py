@@ -9,15 +9,15 @@ from pathlib import Path
 
 import poppy
 
-def make_gaussian_inf_fun(act_spacing=300e-6*u.m, sampling=10, coupling=0.15, Nact=4):
+def make_gaussian_inf_fun(act_spacing=300e-6, sampling=10, coupling=0.15, Nact=4):
     ng = int(sampling*Nact)
-    pxscl = act_spacing/(sampling*u.pix)
+    pxscl = act_spacing/(sampling)
 
-    xs = (xp.linspace(-ng/2,ng/2-1,ng)+1/2)*pxscl.to_value(u.m/u.pix)
+    xs = (xp.linspace(-ng/2,ng/2-1,ng)+1/2) * pxscl
     x,y = xp.meshgrid(xs,xs)
     r = xp.sqrt(x**2 + y**2)
 
-    d = act_spacing.to_value(u.m)/np.sqrt(-np.log(coupling))
+    d = act_spacing/np.sqrt(-np.log(coupling))
 
     inf_fun = np.exp(-(r/d)**2)
 

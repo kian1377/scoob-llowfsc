@@ -14,28 +14,28 @@ class single():
 
     def __init__(
             self,
-            wavelength=633e-9*u.m, 
+            wavelength=633e-9, 
             dm_ref=xp.zeros((34,34)),
             entrance_flux=None, 
         ):
         
-        self.wavelength_c = 633e-9*u.m
-        self.total_pupil_diam = 2.4 * u.m # assumed total telescope diameter
-        self.fsm_beam_diam = 7.1*u.mm
-        self.dm_beam_diam = 9.1*u.mm # as measured in the Fresnel model
-        self.lyot_pupil_diam = 9.1*u.mm
-        self.lyot_diam = 8.6*u.mm
-        self.lyot_ratio = (self.lyot_diam/self.lyot_pupil_diam).decompose().value
-        self.rls_diam = 25.4*u.mm
-        self.d_oap_ls = 150*u.mm
-        self.imaging_fl = 140*u.mm
-        self.llowfsc_fl = 200*u.mm
-        self.llowfsc_fnum = self.llowfsc_fl.to_value(u.mm)/self.lyot_diam.to_value(u.mm)
-        self.llowfsc_defocus = 2.5*u.mm
-        self.camsci_pxscl = 4.6*u.um / u.pix
+        self.wavelength_c = 633e-9
+        self.total_pupil_diam = 2.4 # assumed total telescope diameter
+        self.fsm_beam_diam = 7.1e-3
+        self.dm_beam_diam = 9.1e-3 # as measured in the Fresnel model
+        self.lyot_pupil_diam = 9.1e-3
+        self.lyot_diam = 8.6e-3
+        self.lyot_ratio = self.lyot_diam/self.lyot_pupil_diam
+        self.rls_diam = 25.4e-3
+        self.d_oap_ls = 150e-3
+        self.imaging_fl = 140e-3
+        self.llowfsc_fl = 200e-3
+        self.llowfsc_fnum = self.llowfsc_fl/self.lyot_diam
+        self.llowfsc_defocus = 2.75e-3
+        self.camsci_pxscl = 4.6e-6
         self.camsci_pxscl_lamDc = 0.307
-        self.camlo_pxscl = 3.76*u.um / u.pix
-        self.camlo_pxscl_lamDc = (self.camlo_pxscl / (self.llowfsc_fl * self.wavelength_c / self.lyot_pupil_diam)).decompose().value
+        self.camlo_pxscl = 3.76e-6
+        self.camlo_pxscl_lamDc = self.camlo_pxscl / (self.llowfsc_fl * self.wavelength_c / self.lyot_pupil_diam)
 
         self.wavelength = wavelength
         self.use_vortex = False
@@ -51,16 +51,16 @@ class single():
         self.ncamlo = 96
 
         self.tt_pv_to_rms = 1/4
-        self.as_per_radian = 206265
+        self.as_per_radian = 206264.806
 
         ### INITIALIZE APERTURES ###
-        self.npix_rls = int( np.round( self.npix * self.rls_diam.to_value(u.mm) / self.lyot_pupil_diam.to_value(u.mm) ))
-        pwf = poppy.FresnelWavefront(beam_radius=self.dm_beam_diam/2, npix=self.npix, oversample=1)
-        self.APERTURE = poppy.CircularAperture(radius=self.dm_beam_diam/2).get_transmission(pwf)
-        self.LYOTSTOP = poppy.CircularAperture(radius=self.lyot_diam/2).get_transmission(pwf)
+        self.npix_rls = int( np.round( self.npix * self.rls_diam / self.lyot_pupil_diam ))
+        pwf = poppy.FresnelWavefront(beam_radius=self.dm_beam_diam/2*u.m, npix=self.npix, oversample=1)
+        self.APERTURE = poppy.CircularAperture(radius=self.dm_beam_diam/2*u.m).get_transmission(pwf)
+        self.LYOTSTOP = poppy.CircularAperture(radius=self.lyot_diam/2*u.m).get_transmission(pwf)
 
-        pwf_rls = poppy.FresnelWavefront(beam_radius=self.dm_beam_diam/2, npix=self.npix, oversample=self.rls_oversample)
-        rls_ap = poppy.CircularAperture(radius=self.rls_diam/2).get_transmission(pwf_rls)
+        pwf_rls = poppy.FresnelWavefront(beam_radius=self.dm_beam_diam/2*u.m, npix=self.npix, oversample=self.rls_oversample)
+        rls_ap = poppy.CircularAperture(radius=self.rls_diam/2*u.m).get_transmission(pwf_rls)
         self.RLS = rls_ap - utils.pad_or_crop( self.LYOTSTOP, self.Nrls)
         rls_ap = 0
 
@@ -91,16 +91,16 @@ class single():
         self.Imax_ref = 1
         self.entrance_flux = entrance_flux
         if self.entrance_flux is not None:
-            pixel_area = (self.total_pupil_diam/self.npix)**2
+            pixel_area = (self.total_pupil_diam*u.m/self.npix)**2
             flux_per_pixel = self.entrance_flux * pixel_area
             self.APERTURE *= xp.sqrt(flux_per_pixel.to_value(u.photon/u.second))
 
         ### INITIALIZE DM PARAMETERS ###
         self.Nact = 34
         self.dm_shape = (self.Nact, self.Nact)
-        self.act_spacing = 300e-6*u.m
-        self.dm_pxscl = self.dm_beam_diam.to_value(u.m) / self.npix
-        self.inf_sampling = self.act_spacing.to_value(u.m)/self.dm_pxscl
+        self.act_spacing = 300e-6
+        self.dm_pxscl = self.dm_beam_diam / self.npix
+        self.inf_sampling = self.act_spacing / self.dm_pxscl
         self.inf_fun = dm.make_gaussian_inf_fun(
             act_spacing=self.act_spacing, 
             sampling=self.inf_sampling, 
@@ -171,8 +171,8 @@ class single():
     @wavelength.setter
     def wavelength(self, wl):
         self._wavelength = wl
-        self.camsci_pxscl_lamD = self.camsci_pxscl_lamDc * (self.wavelength_c/wl).decompose().value
-        self.camlo_pxscl_lamD = self.camlo_pxscl_lamDc * (self.wavelength_c/wl).decompose().value
+        self.camsci_pxscl_lamD = self.camsci_pxscl_lamDc * self.wavelength_c/wl
+        self.camlo_pxscl_lamD = self.camlo_pxscl_lamDc * self.wavelength_c/wl
 
     def zero_fsm(self,):
         self.FSM_PTT = np.array([0,0,0])
@@ -180,9 +180,10 @@ class single():
 
     def set_fsm(self, ptt):
         self.FSM_PTT = ptt
+        # self.FSM_OPD = self.FSM_PTT[0]*self.PTT_MODES[0] + self.FSM_PTT[1]*self.PTT_MODES[1] + self.FSM_PTT[2]*self.PTT_MODES[2]
         
-        tip_at_pupil_pv = np.tan(self.FSM_PTT[1]/self.as_per_radian) * self.fsm_beam_diam.to_value(u.m)
-        tilt_at_pupil_pv = np.tan(self.FSM_PTT[2]/self.as_per_radian) * self.fsm_beam_diam.to_value(u.m)
+        tip_at_pupil_pv = np.tan(self.FSM_PTT[1]/self.as_per_radian) * self.fsm_beam_diam
+        tilt_at_pupil_pv = np.tan(self.FSM_PTT[2]/self.as_per_radian) * self.fsm_beam_diam
 
         tip_at_pupil_rms = tip_at_pupil_pv * self.tt_pv_to_rms
         tilt_at_pupil_rms = tilt_at_pupil_pv * self.tt_pv_to_rms
@@ -191,14 +192,18 @@ class single():
 
     def add_fsm(self, ptt):
         self.FSM_PTT = self.FSM_PTT + ptt
+        # self.FSM_OPD = self.FSM_PTT[0]*self.PTT_MODES[0] + self.FSM_PTT[1]*self.PTT_MODES[1] + self.FSM_PTT[2]*self.PTT_MODES[2]
 
-        tip_at_pupil_pv = np.tan(self.FSM_PTT[1]/self.as_per_radian) * self.fsm_beam_diam.to_value(u.m)
-        tilt_at_pupil_pv = np.tan(self.FSM_PTT[2]/self.as_per_radian) * self.fsm_beam_diam.to_value(u.m)
+        tip_at_pupil_pv = np.tan(self.FSM_PTT[1]/self.as_per_radian) * self.fsm_beam_diam
+        tilt_at_pupil_pv = np.tan(self.FSM_PTT[2]/self.as_per_radian) * self.fsm_beam_diam
 
         tip_at_pupil_rms = tip_at_pupil_pv * self.tt_pv_to_rms
         tilt_at_pupil_rms = tilt_at_pupil_pv * self.tt_pv_to_rms
 
         self.FSM_OPD = self.FSM_PTT[0]*self.PTT_MODES[0] + tip_at_pupil_rms*self.PTT_MODES[1] + tilt_at_pupil_rms*self.PTT_MODES[2]
+    
+    def get_fsm(self):
+        return self.FSM_PTT
 
     def reset_dm(self):
         self.dm_channels = xp.zeros((10,34,34))
@@ -228,7 +233,7 @@ class single():
         mft_command = self.Mx @ self.dm_total @ self.My
         fourier_surf = self.inf_fun_fft * mft_command
         dm_surf = xp.fft.fftshift( xp.fft.ifft2( xp.fft.ifftshift( fourier_surf, ))).real
-        dm_phasor = xp.exp(1j * 4*xp.pi/self.wavelength.to_value(u.m) * dm_surf )
+        dm_phasor = xp.exp(1j * 4*xp.pi/self.wavelength * dm_surf )
         dm_phasor = utils.pad_or_crop(dm_phasor, self.N)
         return dm_phasor
 
@@ -268,8 +273,8 @@ class single():
         return post_vortex_pup_wf
 
     def calc_wfs_camsci(self, return_all=True, plot=False): # method for getting the PSF in photons
-        FSM_PHASOR = xp.exp(1j * 4*xp.pi/self.wavelength.to_value(u.m) * self.FSM_OPD )
-        PREFPM_WFE = self.PREFPM_AMP * xp.exp(1j * 2*xp.pi/self.wavelength.to_value(u.m) * self.PREFPM_OPD )
+        FSM_PHASOR = xp.exp(1j * 4*xp.pi/self.wavelength * self.FSM_OPD )
+        PREFPM_WFE = self.PREFPM_AMP * xp.exp(1j * 2*xp.pi/self.wavelength * self.PREFPM_OPD )
         E_EP =  self.APERTURE.astype(complex) * PREFPM_WFE * FSM_PHASOR
         E_EP = utils.pad_or_crop(E_EP, self.N)
         if plot: imshow2(xp.abs(E_EP), xp.angle(E_EP), 'EP WF', cmap2='twilight', npix=int(self.plot_oversample*self.npix))
@@ -285,7 +290,7 @@ class single():
             E_LP = copy.copy(E_DM)
         # print(E_LP.shape)
 
-        POSTFPM_WFE = self.POSTFPM_AMP * xp.exp(1j * 2*xp.pi/self.wavelength.to_value(u.m) * self.POSTFPM_OPD )
+        POSTFPM_WFE = self.POSTFPM_AMP * xp.exp(1j * 2*xp.pi/self.wavelength * self.POSTFPM_OPD )
         E_LP =  E_LP * utils.pad_or_crop(POSTFPM_WFE, E_LP.shape[0])
         if plot: imshow2(xp.abs(E_LP), xp.angle(E_LP), 'At Lyot Pupil WF', cmap2='twilight', npix=int(self.plot_oversample*self.npix))
 
@@ -301,8 +306,8 @@ class single():
             return E_CAMSCI
     
     def calc_wfs_camlo(self, return_all=True, plot=False): # method for getting the PSF in photons
-        FSM_PHASOR = xp.exp(1j * 4*xp.pi/self.wavelength.to_value(u.m) * self.FSM_OPD )
-        PREFPM_WFE = self.PREFPM_AMP * xp.exp(1j * 2*xp.pi/self.wavelength.to_value(u.m) * self.PREFPM_OPD )
+        FSM_PHASOR = xp.exp(1j * 4*xp.pi/self.wavelength * self.FSM_OPD )
+        PREFPM_WFE = self.PREFPM_AMP * xp.exp(1j * 2*xp.pi/self.wavelength * self.PREFPM_OPD )
         E_EP =  self.APERTURE.astype(complex) * PREFPM_WFE * FSM_PHASOR
         E_EP = utils.pad_or_crop(E_EP, self.N)
         if plot: imshow2(xp.abs(E_EP), xp.angle(E_EP), 'EP WF', cmap2='twilight', npix=int(self.plot_oversample*self.npix))
@@ -318,14 +323,14 @@ class single():
             E_LP = copy.copy(E_DM)
         # print(E_LP.shape)
 
-        E_LP = props.ang_spec(E_LP, self.wavelength, -self.d_oap_ls, self.lyot_pupil_diam/(self.npix*u.pix))
+        E_LP = props.ang_spec(E_LP, self.wavelength, -self.d_oap_ls, self.lyot_pupil_diam/self.npix)
         if plot: imshow2(xp.abs(E_LP), xp.angle(E_LP), 'Back Prop to OAP WF', cmap2='twilight', npix=int(self.plot_oversample*self.npix))
         E_LP *= utils.pad_or_crop(self.OAP_AP, E_LP.shape[0])
         if plot: imshow2(xp.abs(E_LP), xp.angle(E_LP), 'After OAP Aperture WF', cmap2='twilight', npix=int(self.plot_oversample*self.npix))
-        E_LP = props.ang_spec(E_LP, self.wavelength, self.d_oap_ls, self.lyot_pupil_diam/(self.npix*u.pix))
+        E_LP = props.ang_spec(E_LP, self.wavelength, self.d_oap_ls, self.lyot_pupil_diam/self.npix)
         if plot: imshow2(xp.abs(E_LP), xp.angle(E_LP), 'Back to Lyot Pupil WF', cmap2='twilight', npix=int(self.plot_oversample*self.npix))
         
-        RLS_WFE = self.RLS_AMP * xp.exp(1j * 2*xp.pi/self.wavelength.to_value(u.m) * self.RLS_OPD )
+        RLS_WFE = self.RLS_AMP * xp.exp(1j * 2*xp.pi/self.wavelength * self.RLS_OPD )
         E_RLS =  E_LP * utils.pad_or_crop(self.RLS, E_LP.shape[0]).astype(complex) * utils.pad_or_crop(RLS_WFE, E_LP.shape[0])
         if plot: imshow2(xp.abs(E_RLS), xp.angle(E_RLS), 'At RLS WF', cmap2='twilight', npix=int(self.plot_oversample*self.npix))
 
@@ -333,11 +338,11 @@ class single():
         # if plot: imshow2(xp.abs(E_RLS), xp.angle(E_RLS), 'After RLS WF', cmap2='twilight')
 
         # Use TF and MFT to propagate to defocused image
-        self.llowfsc_fnum = self.llowfsc_fl.to_value(u.mm)/self.lyot_diam.to_value(u.mm)
+        self.llowfsc_fnum = self.llowfsc_fl/self.lyot_diam
         camlo_tf = props.get_fresnel_TF(
-            self.llowfsc_defocus.to_value(u.m) * self.rls_oversample**2, 
+            self.llowfsc_defocus * self.rls_oversample**2, 
             self.Nrls, 
-            self.wavelength.to_value(u.m), 
+            self.wavelength, 
             self.llowfsc_fnum,
         )
         E_CAMLO = props.mft_forward(camlo_tf*E_RLS, self.npix*self.lyot_ratio, self.ncamlo, self.camlo_pxscl_lamD)

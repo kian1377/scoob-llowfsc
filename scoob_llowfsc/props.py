@@ -25,35 +25,17 @@ def ifft(arr):
 
 
 def ang_spec(wavefront, wavelength, distance, pixelscale):
-    """Propagate a wavefront a given distance via the angular spectrum method. 
-
-    Parameters
-    ----------
-    wavefront : complex 2D array
-        the input wavefront
-    wavelength : astropy quantity
-        the wavelength of the wavefront
-    distance : astropy quantity
-        distance to propagate wavefront
-    pixelscale : astropy quantity
-        pixelscale in physical units of the wavefront
-
-    Returns
-    -------
-    complex 2D array
-        the propagated wavefront
-    """
     n = wavefront.shape[0]
 
-    delkx = 2*np.pi/(n*pixelscale.to_value(u.m/u.pix))
+    delkx = 2*np.pi/(n*pixelscale)
     kxy = (xp.linspace(-n/2, n/2-1, n) + 1/2)*delkx
-    k = 2*np.pi/wavelength.to_value(u.m)
+    k = 2*np.pi/wavelength
     kx, ky = xp.meshgrid(kxy,kxy)
 
     wf_as = xp.fft.ifftshift(xp.fft.fft2(xp.fft.fftshift(wavefront)))
     
     kz = xp.sqrt(k**2 - kx**2 - ky**2 + 0j)
-    tf = xp.exp(1j*kz*distance.to_value(u.m))
+    tf = xp.exp(1j*kz*distance)
 
     prop_wf = xp.fft.fftshift(xp.fft.ifft2(xp.fft.ifftshift(wf_as * tf)))
     kz = 0.0

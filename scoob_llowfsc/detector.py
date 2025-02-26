@@ -13,7 +13,7 @@ class DETECTOR():
             gain=1, 
             read_noise=5, 
             blacklevel=5,
-            dark_current=1, 
+            dark_current=0.5, # e per second 
             qe=0.5, 
             Nbits=16,
         ):
@@ -31,8 +31,12 @@ class DETECTOR():
         flux = self.throughput * flux_image
         ph_counts = xp.random.poisson(flux * self.exp_time)
         e_counts = self.qe * ph_counts
-        det_counts = self.gain * e_counts
-        det_counts += xp.random.poisson(self.blacklevel*xp.ones_like(flux_image)) # add blacklevel with poisson noise applied
+
+        dark_counts = self.dark_current * self.exp_time * xp.ones_like(flux_image)
+        dark_counts = xp.random.poisson(dark_counts)
+
+        det_counts = self.gain * ( e_counts + dark_counts )
+        det_counts += self.blacklevel * xp.ones_like(flux_image)
         det_counts += xp.random.normal(self.read_noise, size=flux_image.shape[0]) # add read noise
         det_counts[det_counts>self.sat_thresh] = self.sat_thresh
         det_counts = xp.round(det_counts)

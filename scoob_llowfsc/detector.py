@@ -39,11 +39,12 @@ class DETECTOR():
         ph_counts = flux * self.exp_time
         e_counts = self.qe * ph_counts
         dark_counts = self.dark_current * self.exp_time * xp.ones_like(flux_image)
+        read_noise = self.read_noise * xp.random.randn(flux_image.shape[0], flux_image.shape[1])
+        # print(read_noise.shape)
 
         det_counts = self.gain * xp.random.poisson(e_counts + dark_counts)
 
-        det_counts = det_counts + self.blacklevel * xp.ones_like(flux_image)
-        det_counts += xp.random.normal(self.read_noise, size=flux_image.shape[0]) # add read noise
+        det_counts = det_counts + self.blacklevel * xp.ones_like(flux_image) + read_noise
         det_counts[det_counts>self.sat_thresh] = self.sat_thresh
         det_counts = xp.round(det_counts)
         return det_counts

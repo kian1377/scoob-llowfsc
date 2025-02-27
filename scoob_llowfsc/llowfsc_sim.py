@@ -198,7 +198,7 @@ def calibrate_with_fsm(
         
         if plot: imshow3(amp*mode, im_pos, diff, f'Mode {i+1}', 'Absolute Image', 'Difference', cmap1='viridis')
         
-        print(f"\tCalibrated mode {i+1:d}/{dm_modes.shape[0]:d} in {time.time()-start:.3f}s", end='')
+        print(f"\tCalibrated mode {i+1:d}/{Nmodes:d} in {time.time()-start:.3f}s", end='')
         print("\r", end="")
 
     response_matrix = responses.T
@@ -249,7 +249,7 @@ def run_with_fsm(
         modal_coeff = - gain * control_matrix.dot(del_im[control_mask])
 
         del_fsm_rms = ensure_np_array(modal_coeff[:2])
-        del_fsm_as = fsm_rms_to_as(del_fsm_rms, M.fsm_beam_diam.to_value(u.m))
+        del_fsm_as = fsm_rms_to_as(del_fsm_rms, M.fsm_beam_diam)
         del_fsm_command = np.array([0, del_fsm_as[0], del_fsm_as[1]])
         total_fsm_command = (1 - leakage) * M.get_fsm() + del_fsm_command
         M.set_fsm(total_fsm_command)

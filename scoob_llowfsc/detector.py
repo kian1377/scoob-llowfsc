@@ -28,15 +28,21 @@ class DETECTOR():
         self.gain = gain
 
     def add_noise(self, flux_image):
+        # flux = self.throughput * flux_image
+        # ph_counts = xp.random.poisson(flux * self.exp_time)
+        # e_counts = self.qe * ph_counts
+
+        # dark_counts = self.dark_current * self.exp_time * xp.ones_like(flux_image)
+        # dark_counts = xp.random.poisson(dark_counts)
+
         flux = self.throughput * flux_image
-        ph_counts = xp.random.poisson(flux * self.exp_time)
+        ph_counts = flux * self.exp_time
         e_counts = self.qe * ph_counts
-
         dark_counts = self.dark_current * self.exp_time * xp.ones_like(flux_image)
-        dark_counts = xp.random.poisson(dark_counts)
 
-        det_counts = self.gain * ( e_counts + dark_counts )
-        det_counts += self.blacklevel * xp.ones_like(flux_image)
+        det_counts = self.gain * xp.random.poisson(e_counts + dark_counts)
+
+        det_counts = det_counts + self.blacklevel * xp.ones_like(flux_image)
         det_counts += xp.random.normal(self.read_noise, size=flux_image.shape[0]) # add read noise
         det_counts[det_counts>self.sat_thresh] = self.sat_thresh
         det_counts = xp.round(det_counts)

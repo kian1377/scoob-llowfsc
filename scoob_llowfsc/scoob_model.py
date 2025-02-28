@@ -2,7 +2,7 @@ from .math_module import xp, xcipy, ensure_np_array
 from scoob_llowfsc import utils
 from scoob_llowfsc.imshows import imshow1, imshow2, imshow3
 import scoob_llowfsc.props as props
-import scoob_llowfsc.dm as dm
+# import scoob_llowfsc.dm as dm
 
 import numpy as np
 import astropy.units as u
@@ -101,7 +101,7 @@ class single():
         self.act_spacing = 300e-6
         self.dm_pxscl = self.dm_beam_diam / self.npix
         self.inf_sampling = self.act_spacing / self.dm_pxscl
-        self.inf_fun = dm.make_gaussian_inf_fun(
+        self.inf_fun = utils.make_gaussian_inf_fun(
             act_spacing=self.act_spacing, 
             sampling=self.inf_sampling, 
             coupling=0.15, 

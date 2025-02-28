@@ -156,6 +156,20 @@ def beta_reg(S, beta=-1):
     control_matrix = xp.matmul( xp.linalg.inv( sts + alpha2*10.0**(beta) * xp.eye(sts.shape[0]) ), S.T)
     return control_matrix
 
+def make_gaussian_inf_fun(act_spacing=300e-6, sampling=10, coupling=0.15, Nact=4):
+    ng = int(sampling*Nact)
+    pxscl = act_spacing/(sampling)
+
+    xs = (xp.linspace(-ng/2,ng/2-1,ng)+1/2) * pxscl
+    x,y = xp.meshgrid(xs,xs)
+    r = xp.sqrt(x**2 + y**2)
+
+    d = act_spacing/np.sqrt(-np.log(coupling))
+
+    inf_fun = np.exp(-(r/d)**2)
+
+    return inf_fun
+
 def create_circ_mask(h, w, center=None, radius=None):
 
     if center is None: # use the middle of the image
@@ -169,12 +183,6 @@ def create_circ_mask(h, w, center=None, radius=None):
     mask = dist_from_center <= radius
     return mask
 
-# def create_dm_mask:
-    # xx = (np.linspace(0, self.Nact-1, self.Nact) - self.Nact/2 + 1/2) * self.act_spacing
-    # x,y = np.meshgrid(xx,xx)
-    # r = np.sqrt(x**2 + y**2)
-    # self.dm_mask = r<10.5e-3/2
-
 # Creating focal plane masks
 def create_annular_focal_plane_mask(
         npsf, 
@@ -184,7 +192,7 @@ def create_annular_focal_plane_mask(
         edge=None,
         rotation=0,
     ):
-    x = (xp.linspace(-npsf/2, npsf/2-1, npsf) + 1/2)*psf_pixelscale
+    x = (xp.linspace(-npsf/2, npsf/2-1, npsf) + 1/2) * psf_pixelscale
     x,y = xp.meshgrid(x,x)
     r = xp.hypot(x, y)
     mask = (r > irad) * (r < orad)
@@ -294,7 +302,6 @@ def create_fourier_probes(
         probes[i] = probe/xp.max(probe)
 
     return probes
-
 
 def make_f(h=10, w=6, shift=(0,0), Nact=34):
     f_command = xp.zeros((Nact, Nact))

@@ -354,9 +354,19 @@ import matplotlib.pyplot as plt
 from matplotlib.gridspec import GridSpec
 from matplotlib.colors import LogNorm
 
-def plot_responses(dm_modes, response_cube):
-    fig = plt.figure(figsize=(25,5), dpi=125)
+def plot_responses(
+        dm_modes, 
+        response_cube, 
+        figsize=(25,5),
+        dpi=125,
+        hspace=0.0,
+        wspace=-0.05,
+        title=None,
+        title_fs=14,
+    ):
+    fig = plt.figure(figsize=figsize, dpi=dpi)
     gs = GridSpec(2, 10, figure=fig)
+    fig.suptitle(title, fontsize=title_fs)
 
     for i in range(10):
         mode = ensure_np_array(dm_modes[i])
@@ -372,6 +382,6 @@ def plot_responses(dm_modes, response_cube):
         ax.set_xticks([])
         ax.set_yticks([])
 
-    plt.subplots_adjust(hspace=0, wspace=-0.05)
+    plt.subplots_adjust(hspace=hspace, wspace=wspace)
 
 

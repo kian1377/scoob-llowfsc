@@ -54,7 +54,7 @@ def move_block_out(client, delay=2):
     client['stagelinear.presetName.block_out'] = purepyindi.SwitchState.ON
     time.sleep(delay)
 
-def set_zwo_roi(xc, yc, npix, client, delay=0.25):
+def set_camsci_roi(xc, yc, npix, client, delay=0.25):
     # update roi parameters
     client.wait_for_properties(['camsci.roi_region_x', 'camsci.roi_region_y', 
                                 'camsci.roi_region_h' ,'camsci.roi_region_w', 
@@ -68,26 +68,79 @@ def set_zwo_roi(xc, yc, npix, client, delay=0.25):
     client['camsci.roi_set.request'] = purepyindi.SwitchState.ON
     time.sleep(delay)
 
+def set_fib_atten(self, value, client, delay=0.1):
+        client['fiberatten.atten.target'] = value
+        time.sleep(delay)
+        self.atten = value
+        print(f'Set the fiber attenuation to {value:.1f}')
+
+def set_camsci_exp_time(exp_time, client, delay=0.25):
+    if exp_time<3.2e-5:
+        print('Minimum exposure time is 3.2E-5 seconds. Setting exposure time to minimum.')
+        exp_time = 3.2e-5
+    client.wait_for_properties(['camsci.exptime'])
+    client['camsci.exptime.target'] = exp_time
+    time.sleep(delay)
+    print(f'Set the CAMSCI exposure time to {exp_time:.2e}s')
+
+def set_camsci_gain(gain, client, delay=0.1):
+    client.wait_for_properties(['camsci.emgain'])
+    client['camsci.emgain.target'] = gain
+    time.sleep(delay)
+    print(f'Set the CAMSCI gain setting to {gain:.1f}')
+
+def normalize_camsci_image(image, im_params, ref_psf_params):
+    image_ni = image/ref_psf_params['Imax']
+    image_ni *= (ref_psf_params['texp']/im_params['texp'])
+    image_ni *= 10**((im_params['atten']-ref_psf_params['atten'])/10)
+    image_ni *= 10**(-im_params['gain']/20 * 0.1) / 10**(-ref_psf_params['gain']/20 * 0.1)
+    return image_ni
+
+def set_camlo_exp_time(exp_time, client, delay=0.25):
+    if exp_time<3.2e-5:
+        print('Minimum exposure time is 3.2E-5 seconds. Setting exposure time to minimum.')
+        exp_time = 3.2e-5
+    client.wait_for_properties(['camlo.exptime'])
+    client['camlo.exptime.target'] = exp_time
+    time.sleep(delay)
+    print(f'Set the CAMLO exposure time to {exp_time:.2e}s')
+
+def set_camlo_gain(gain, client, delay=0.1):
+    client.wait_for_properties(['camlo.emgain'])
+    client['camlo.emgain.target'] = gain
+    time.sleep(delay)
+    print(f'Set the CAMLO gain setting to {gain:.1f}')
+
 class SCOOBI():
 
     def __init__(
             self, 
             dm_channel,
-            scicam_channel=None,
-            locam_channel=None,
+            camsci_channel=None,
+            camlo_channel=None,
             dm_ref=np.zeros((34,34)),
-            npsf=150,
+            Ncamsci=150,
         ):
-        self.wavelength_c = 633e-9
-        
-        self.CAMSCI = ImageStream(scicam_channel) if scicam_channel is not None else None
-        self.CAMLO = ImageStream(locam_channel) if locam_channel is not None else None
-        self.DM = scoob_utils.connect_to_dmshmim(channel=dm_channel) # channel used for writing to DM
+        self.camsci_stream = ImageStream(camsci_channel) if camsci_channel is not None else None
+        self.camlo_stream = ImageStream(camlo_channel) if camlo_channel is not None else None
+        self.dm_stream = scoob_utils.connect_to_dmshmim(channel=dm_channel) # channel used for writing to DM
         self.dm_delay = 0.1
+
+        self.wavelength_c = 633e-9
+        self.total_pupil_diam = 2.4 # assumed total telescope diameter
+        self.fsm_beam_diam = 7.1e-3
+        self.dm_beam_diam = 9.1e-3 # as measured in the Fresnel model
+        self.lyot_pupil_diam = 9.1e-3
+        self.lyot_diam = 8.6e-3
+        self.lyot_ratio = self.lyot_diam/self.lyot_pupil_diam
+        self.camsci_pxscl = 4.6e-6
+        self.camsci_pxscl_lamDc = 0.307
+        self.camlo_pxscl = 3.76e-6
+        self.camlo_pxscl_lamDc = self.camlo_pxscl / (self.llowfsc_fl * self.wavelength_c / self.lyot_pupil_diam)
 
         # Init all DM settings
         self.Nact = 34
-        self.Nacts = 952 # accounting for the bad actuator
+        self.Nacts = 952
         self.dm_shape = (self.Nact,self.Nact)
         self.act_spacing = 300e-6
         self.dm_ref = dm_ref
@@ -97,20 +150,15 @@ class SCOOBI():
         x,y = np.meshgrid(xx,xx)
         r = np.sqrt(x**2 + y**2)
         self.dm_mask = r<10.5e-3/2
-        self.dm_pupil_mask = r<9.6e-3/2
 
-        # Init camera settings
-        self.psf_pixelscale = 4.6e-6
-        self.psf_pixelscale_lamDc = 0.307
-        self.nbits = 16
         self.NCAMSCI = 1
         self.NCAMLO = 1
-        self.npsf = npsf
-        self.nlocam = 100
-        self.x_shift = 0
-        self.y_shift = 0
-        self.x_shift_locam = 0
-        self.y_shift_locam = 0
+        self.Ncamsci = 150
+        self.Ncamlo = 96
+        self.camsci_x_shift = 0
+        self.camsci_y_shift = 0
+        self.camlo_x_shift = 0
+        self.camlo_y_shift = 0
 
         self.atten = 1
         self.texp = 1
@@ -120,7 +168,6 @@ class SCOOBI():
         
         self.ref_psf_params = None
         self.dark_frame = None
-
         self.subtract_dark = False
         self.return_ni = False
 
@@ -136,7 +183,7 @@ class SCOOBI():
         self.atten = value
         print(f'Set the fiber attenuation to {value:.1f}')
 
-    def set_zwo_exp_time(self, exp_time, client, delay=0.25):
+    def set_camsci_exp_time(self, exp_time, client, delay=0.25):
         if exp_time<3.2e-5:
             print('Minimum exposure time is 3.2E-5 seconds. Setting exposure time to minimum.')
             exp_time = 3.2e-5
@@ -146,7 +193,7 @@ class SCOOBI():
         self.texp = exp_time
         print(f'Set the ZWO exposure time to {self.texp:.2e}s')
 
-    def set_zwo_gain(self, gain, client, delay=0.1):
+    def set_camsci_gain(self, gain, client, delay=0.1):
         client.wait_for_properties(['camsci.emgain'])
         client['camsci.emgain.target'] = gain
         time.sleep(delay)
@@ -154,47 +201,43 @@ class SCOOBI():
         print(f'Set the ZWO gain setting to {gain:.1f}')
     
     def zero_dm(self):
-        self.DM.write(np.zeros(self.dm_shape))
+        self.dm_stream.write(np.zeros(self.dm_shape))
         time.sleep(self.dm_delay)
     
     def reset_dm(self):
-        self.DM.write(ensure_np_array(self.dm_ref))
+        self.dm_stream.write(ensure_np_array(self.dm_ref))
         time.sleep(self.dm_delay)
     
     def set_dm(self, dm_command):
-        self.DM.write(ensure_np_array(dm_command)*1e6)
+        self.dm_stream.write(ensure_np_array(dm_command)*1e6)
         time.sleep(self.dm_delay)
     
     def add_dm(self, dm_command):
         dm_state = ensure_np_array(self.get_dm())
-        self.DM.write( 1e6*(dm_state + ensure_np_array(dm_command)) )
+        self.dm_stream.write( 1e6*(dm_state + ensure_np_array(dm_command)) )
         time.sleep(self.dm_delay)
                
     def get_dm(self):
-        return xp.array(self.DM.grab_latest())/1e6
+        return xp.array(self.dm_stream.grab_latest())/1e6
     
     def close_dm(self):
-        self.DM.close()
+        self.dm_stream.close()
 
-    def normalize(self, image):
+    def normalize_camsci(self, image):
         if self.ref_psf_params is None:
             raise ValueError('Cannot normalize because reference PSF not specified.')
-        image_ni = image/self.ref_psf_params['Imax']
-        image_ni *= (self.ref_psf_params['texp']/self.texp)
-        image_ni *= 10**((self.atten-self.ref_psf_params['atten'])/10)
-        image_ni *= 10**(-self.gain/20 * 0.1) / 10**(-self.ref_psf_params['gain']/20 * 0.1)
+        image_ni = image/self.camsci_ref_params['Imax']
+        image_ni *= (self.camsci_ref_params['texp']/self.texp)
+        image_ni *= 10**((self.atten-self.camsci_ref_params['atten'])/10)
+        image_ni *= 10**(-self.gain/20 * 0.1) / 10**(-self.camsci_ref_params['gain']/20 * 0.1)
         return image_ni
 
-    def snap_camsci(self, normalize=False, plot=False, vmin=None):
-        if self.NSCICAM>1:
-            ims = self.SCICAM.grab_many(self.NSCICAM)
-            im = np.sum(ims, axis=0)/self.NSCICAM
-        else:
-            im = self.SCICAM.grab_latest()
+    def snap_camsci(self, plot=False, vmin=None):
+        im = np.mean( self.camsci_stream.grab_many(self.NCAMSCI), axis=0)
         
         im = xp.array(im)
-        im = xcipy.ndimage.shift(im, (self.y_shift, self.x_shift), order=0)
-        im = utils.pad_or_crop(im, self.npsf)
+        im = xcipy.ndimage.shift(im, (self.camsci_y_shift, self.camsci_x_shift), order=0)
+        im = utils.pad_or_crop(im, self.Ncamsci)
 
         if self.subtract_dark and self.df is not None:
             im -= self.df
@@ -207,15 +250,11 @@ class SCOOBI():
         return im
     
     def snap_camlo(self, normalize=False, plot=False, vmin=None):
-        if self.NCAMLO>1:
-            ims = self.LOCAM.grab_many(self.NLOCAM)
-            im = np.sum(ims, axis=0)/self.NLOCAM
-        else:
-            im = self.LOCAM.grab_latest()
+        im = np.mean( self.camlo_stream.grab_many(self.NCAMLO), axis=0)
 
         im = xp.array(im)
-        im = xcipy.ndimage.shift(im, (self.y_shift_locam, self.x_shift_locam), order=0)
-        im = utils.pad_or_crop(im, self.nlocam)
+        im = xcipy.ndimage.shift(im, (self.camlo_y_shift, self.camlo_x_shift), order=0)
+        im = utils.pad_or_crop(im, self.Ncamlo)
 
         return im
     

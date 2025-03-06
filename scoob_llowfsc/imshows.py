@@ -372,7 +372,7 @@ def plot_howfsc(
         dpi=125,
         fname=None,
     ):
-    flat_command = ensure_np_array(dm_flat)
+    flat_command = ensure_np_array(dm_flat) * 1e9
     ims = ensure_np_array( xp.array(data['images']) ) 
     control_mask = ensure_np_array( data['control_mask'] )
 
@@ -387,7 +387,7 @@ def plot_howfsc(
     ibest = np.argmin(mean_nis)
     ref_im = ensure_np_array(data['images'][0])
     best_im = ensure_np_array(data['images'][ibest])
-    best_command = ensure_np_array(data['commands'][ibest-1])
+    best_command = ensure_np_array(data['commands'][ibest-1]) * 1e9
 
     fig = plt.figure(figsize=figsize, dpi=dpi)
     gs = GridSpec(2, 3, figure=fig)
@@ -400,7 +400,7 @@ def plot_howfsc(
     divider = make_axes_locatable(ax)
     cax = divider.append_axes("right", size="4%", pad=0.075)
     cbar = fig.colorbar(im, cax=cax)
-    cbar.ax.set_ylabel('m', rotation=0, labelpad=7)
+    cbar.ax.set_ylabel('nm', rotation=0, labelpad=7)
 
     ax = fig.add_subplot(gs[0, 1])
     im = ax.imshow(best_command, cmap='viridis',)
@@ -410,7 +410,7 @@ def plot_howfsc(
     divider = make_axes_locatable(ax)
     cax = divider.append_axes("right", size="4%", pad=0.075)
     cbar = fig.colorbar(im, cax=cax)
-    cbar.ax.set_ylabel('m', rotation=0, labelpad=7)
+    cbar.ax.set_ylabel('nm', rotation=0, labelpad=7)
 
     ax = fig.add_subplot(gs[1, 0])
     im = ax.imshow(ref_im, norm=LogNorm(vmax=im1vmax, vmin=im1vmin), cmap='magma', extent=extent)

@@ -1,8 +1,7 @@
 from .math_module import xp, xcipy, ensure_np_array
 from scoob_llowfsc import utils
-from scoob_llowfsc.imshows import imshow1, imshow2, imshow3
 import scoob_llowfsc.props as props
-# import scoob_llowfsc.dm as dm
+from scoob_llowfsc.imshows import imshow1, imshow2, imshow3, imshow
 
 import numpy as np
 import astropy.units as u
@@ -371,6 +370,120 @@ class single():
                 noisy_im += self.CAMLO.add_noise(camlo_im)
             return noisy_im/self.NCAMLO
         return camlo_im
+
+import ray
+
+class parallel():
+    def __init__(
+            self,
+            ACTORS,
+        ):
+
+        self.ACTORS = ACTORS
+        self.Nactors = len(ACTORS)
+
+        self.wavelength_c = 633e-9
+        self.total_pupil_diam = 2.4 # assumed total telescope diameter
+        self.fsm_beam_diam = 7.1e-3
+        self.dm_beam_diam = 9.1e-3 # as measured in the Fresnel model
+        self.lyot_pupil_diam = 9.1e-3
+        self.lyot_diam = 8.6e-3
+        self.lyot_ratio = self.lyot_diam/self.lyot_pupil_diam
+        self.rls_diam = 25.4e-3
+        self.d_oap_ls = 150e-3
+        self.imaging_fl = 140e-3
+        self.llowfsc_fl = 200e-3
+        self.llowfsc_fnum = self.llowfsc_fl/self.lyot_diam
+        self.llowfsc_defocus = 2.75e-3
+        self.camsci_pxscl = 4.6e-6
+        self.camsci_pxscl_lamDc = 0.307
+        self.camlo_pxscl = 3.76e-6
+        self.camlo_pxscl_lamDc = self.camlo_pxscl / (self.llowfsc_fl * self.wavelength_c / self.lyot_pupil_diam)
+
+        # self.wavelength_c = self.getattr('wavelength_c')
+        # self.total_pupil_diam = ray.get(ACTORS[0].getattr.remote('total_pupil_diam'))
+
+        self.dm_mask = ray.get(ACTORS[0].getattr.remote('dm_mask'))
+        self.Nact = self.dm_mask.shape[0]
+        self.dm_ref = ray.get(ACTORS[0].getattr.remote('dm_ref'))
+
+    def getattr(self, attr):
+        return ray.get(self.ACTORS[0].getattr.remote(attr))
     
+    def set_actor_attr(self, attr, value):
+        for i in range(len(self.ACTORS)):
+            self.ACTORS[i].setattr.remote(attr, value)
+    
+    def zero_fsm(self,):
+        for i in range(len(self.ACTORS)):
+            self.ACTORS[i].zero_fsm.remote()
+
+    def set_fsm(self, ptt):
+        for i in range(len(self.ACTORS)):
+            self.ACTORS[i].set_fsm.remote( ptt )
+        
+    def add_fsm(self, ptt):
+        for i in range(len(self.ACTORS)):
+            self.ACTORS[i].add_fsm.remote( ptt )
+
+    def get_fsm(self):
+        return self.getattr('FSM_PTT')
+
+    def reset_dm(self):
+        for i in range(len(self.ACTORS)):
+            self.ACTORS[i].reset_dm.remote()
+
+    def zero_dm(self, channel=1):
+        for i in range(len(self.ACTORS)):
+            self.ACTORS[i].zero_dm.remote(channel)
+
+    def set_dm(self, command, channel=1):
+        for i in range(len(self.ACTORS)):
+            self.ACTORS[i].set_dm.remote(command, channel)
+
+    def add_dm(self, command, channel=1):
+        for i in range(len(self.ACTORS)):
+            self.ACTORS[i].add_dm.remote(command, channel)
+
+    def get_dm(self, channel=1):
+        return copy.copy(self.getattr('dm_channels')[channel])
+
+    def get_dm_total(self):
+        return self.getattr('dm_total')
+    
+    def snap_camsci(self):
+        pending_ims = []
+        for i in range(self.Nactors):
+            future_ims = self.ACTORS[i].snap_camsci.remote()
+            pending_ims.append(future_ims)
+
+        ims = ray.get(pending_ims)
+        ims = xp.array(ims)
+        camsci_im = xp.sum(ims, axis=0)
+
+        return camsci_im
+
+    def snap_camlo(self):
+        pending_ims = []
+        for i in range(self.Nactors):
+            future_ims = self.ACTORS[i].snap_camlo.remote()
+            pending_ims.append(future_ims)
+            
+        ims = ray.get(pending_ims)
+        ims = xp.array(ims)
+        camlo_im = xp.sum(ims, axis=0)
+
+        if self.CAMLO is not None:
+            noisy_im = 0.0
+            for i in range(self.NCAMLO):
+                noisy_im += self.CAMLO.add_noise(camlo_im)
+
+            camlo_im = noisy_im / self.NCAMLO
+
+        return camlo_im
+
+
+
+
 
 

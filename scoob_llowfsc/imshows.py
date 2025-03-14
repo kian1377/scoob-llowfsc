@@ -1,5 +1,5 @@
 from .math_module import xp, xcipy, ensure_np_array
-from scoob_llowfsc import utils
+from esc_fresnel import utils
 
 import numpy as np
 import scipy
@@ -8,8 +8,122 @@ import astropy.units as u
 import matplotlib.pyplot as plt
 plt.rcParams['image.origin'] = 'lower'
 from mpl_toolkits.axes_grid1 import make_axes_locatable
-from matplotlib.colors import LogNorm, Normalize
+from matplotlib.colors import LogNorm, Normalize, CenteredNorm
 from IPython.display import display, clear_output
+
+def imshow(
+        arrs,
+        titles=[], 
+        xlabels=[],
+        ylabels=[],
+        title_fzs=[],
+        label_fzs=[],
+        pxscls=[],
+        npix=[],
+        cmaps=[],
+        norms=[],
+        cbar_labels=[],
+        grids=[],
+        xticks=[],
+        yticks=[], 
+        all_patches=[],
+        figsize=None,
+        dpi=125,
+        Nrows=1,
+        Ncols=None, 
+        wspace=None, 
+        hspace=None, 
+        return_fig=False,
+    ):
+
+    Nax = len(arrs)
+    titles.extend([None] * (Nax - len(titles)))
+    xlabels.extend([None] * (Nax - len(xlabels)))
+    ylabels.extend([None] * (Nax - len(ylabels)))
+    title_fzs.extend([None] * (Nax - len(title_fzs)))
+    label_fzs.extend([None] * (Nax - len(label_fzs)))
+    cmaps.extend([None] * (Nax - len(cmaps)))
+    norms.extend([None] * (Nax - len(norms)))
+    cbar_labels.extend([None] * (Nax - len(cbar_labels)))
+    grids.extend([None] * (Nax - len(grids)))
+    xticks.extend([None] * (Nax - len(xticks)))
+    yticks.extend([None] * (Nax - len(yticks)))
+    pxscls.extend([None] * (Nax - len(pxscls)))
+    npix.extend([None] * (Nax - len(npix)))
+    all_patches.extend([None] * (Nax - len(all_patches)))
+
+    if figsize is None:
+        if Nax==1:
+            figsize = (4,4)
+        elif Nax==2:
+            figsize = (10,4)
+        elif Nax==3:
+            figsize = (15,7)
+        else:
+            figsize = (10,10)
+    
+    if Nrows==1 and Ncols is None:
+        Ncols = Nax
+    fig, axs = plt.subplots(nrows=Nrows, ncols=Ncols, figsize=figsize, dpi=dpi)
+    print(np.ndim(axs))
+
+    row_ind = 0
+    col_ind = 0
+    for i in range(Nax):
+        arr = arrs[i]
+        title = titles[i]
+        xlabel = xlabels[i]
+        ylabel = ylabels[i]
+        title_fz = title_fzs[i]
+        label_fz = label_fzs[i]
+        cmap = cmaps[i]
+        norm = norms[i]
+        cbar_label = cbar_labels[i]
+        xtick = xticks[i]
+        ytick = yticks[i]
+        pxscl = pxscls[i]
+        grid = grids[i]
+        patches = all_patches[i]
+        narr = npix[i]
+
+        if narr is not None: 
+            arr = utils.pad_or_crop(arr, narr)
+
+        Nwidth = arr.shape[1]
+        Nheight = arr.shape[0]
+        extent = None if pxscl is None else [-Nwidth/2*pxscl, Nwidth/2*pxscl, -Nheight/2*pxscl, Nheight/2*pxscl]
+
+        if np.ndim(axs)==0:
+            ax = axs
+        elif np.ndim(axs)==1:
+            ax = axs[i]
+        elif np.ndim(axs)==2:
+            row_ind = i//Ncols
+            col_ind = i%Ncols
+            ax = axs[row_ind, col_ind]
+
+        im = ax.imshow(ensure_np_array(arr), cmap=cmap, norm=norm, extent=extent)
+        ax.set_title(title, fontsize=title_fz)
+        ax.set_xlabel(xlabel, fontsize=label_fz)
+        ax.set_ylabel(ylabel, fontsize=label_fz)
+        if xtick is not None: ax.set_xticks(xtick)
+        if ytick is not None: ax.set_yticks(ytick)
+        if grid is not None: ax.grid()
+        if patches is not None: 
+            for patch in patches:
+                ax.add_patch(patch)
+        divider = make_axes_locatable(ax)
+        cax = divider.append_axes("right", size="4%", pad=0.075)
+        cbar = fig.colorbar(im, cax=cax)
+        cbar.ax.set_ylabel(cbar_label, rotation=0, labelpad=7)
+    
+    plt.subplots_adjust(wspace=wspace, hspace=hspace)
+    plt.close()
+    
+    if return_fig:
+        return fig, axs
+    else:
+        display(fig)
 
 def imshow1(
         arr, 

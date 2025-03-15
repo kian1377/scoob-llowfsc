@@ -382,30 +382,55 @@ class parallel():
         self.ACTORS = ACTORS
         self.Nactors = len(ACTORS)
 
-        self.wavelength_c = 633e-9
-        self.total_pupil_diam = 2.4 # assumed total telescope diameter
-        self.fsm_beam_diam = 7.1e-3
-        self.dm_beam_diam = 9.1e-3 # as measured in the Fresnel model
-        self.lyot_pupil_diam = 9.1e-3
-        self.lyot_diam = 8.6e-3
-        self.lyot_ratio = self.lyot_diam/self.lyot_pupil_diam
-        self.rls_diam = 25.4e-3
-        self.d_oap_ls = 150e-3
-        self.imaging_fl = 140e-3
-        self.llowfsc_fl = 200e-3
-        self.llowfsc_fnum = self.llowfsc_fl/self.lyot_diam
-        self.llowfsc_defocus = 2.75e-3
-        self.camsci_pxscl = 4.6e-6
-        self.camsci_pxscl_lamDc = 0.307
-        self.camlo_pxscl = 3.76e-6
-        self.camlo_pxscl_lamDc = self.camlo_pxscl / (self.llowfsc_fl * self.wavelength_c / self.lyot_pupil_diam)
+        # self.wavelength_c = 633e-9
+        # self.total_pupil_diam = 2.4 # assumed total telescope diameter
+        # self.fsm_beam_diam = 7.1e-3
+        # self.dm_beam_diam = 9.1e-3 # as measured in the Fresnel model
+        # self.lyot_pupil_diam = 9.1e-3
+        # self.lyot_diam = 8.6e-3
+        # self.lyot_ratio = self.lyot_diam/self.lyot_pupil_diam
+        # self.rls_diam = 25.4e-3
+        # self.d_oap_ls = 150e-3
+        # self.imaging_fl = 140e-3
+        # self.llowfsc_fl = 200e-3
+        # self.llowfsc_fnum = self.llowfsc_fl/self.lyot_diam
+        # self.llowfsc_defocus = 2.75e-3
+        # self.camsci_pxscl = 4.6e-6
+        # self.camsci_pxscl_lamDc = 0.307
+        # self.camlo_pxscl = 3.76e-6
+        # self.camlo_pxscl_lamDc = self.camlo_pxscl / (self.llowfsc_fl * self.wavelength_c / self.lyot_pupil_diam)
 
-        # self.wavelength_c = self.getattr('wavelength_c')
-        # self.total_pupil_diam = ray.get(ACTORS[0].getattr.remote('total_pupil_diam'))
+        self.wavelength_c = self.getattr('wavelength_c')
+        self.total_pupil_diam = self.getattr('total_pupil_diam')
+        self.fsm_beam_diam = self.getattr('fsm_beam_diam')
+        self.dm_beam_diam = self.getattr('dm_beam_diam')
+        self.lyot_pupil_diam = self.getattr('lyot_pupil_diam')
+        self.lyot_diam = self.getattr('lyot_diam')
+        self.lyot_ratio = self.getattr('lyot_ratio')
+        self.rls_diam = self.getattr('rls_diam')
+        self.imaging_fl = self.getattr('imaging_fl')
+        self.llowfsc_fl = self.getattr('llowfsc_fl')
+        self.llowfsc_fnum  = self.getattr('llowfsc_fnum')
+        self.llowfsc_defocus = self.getattr('llowfsc_defocus')
+        self.camsci_pxscl = self.getattr('camsci_pxscl')
+        self.camsci_pxscl_lamDc = self.getattr('camsci_pxscl_lamDc')
+        self.camlo_pxscl = self.getattr('camlo_pxscl_lamDc')
+        self.camlo_pxscl_lamDc = self.getattr('camlo_pxscl_lamDc')
 
+        self.PTT_MODES = ray.get(ACTORS[0].getattr.remote('PTT_MODES'))
+
+        self.Nact = ray.get(ACTORS[0].getattr.remote('Nact'))
         self.dm_mask = ray.get(ACTORS[0].getattr.remote('dm_mask'))
-        self.Nact = self.dm_mask.shape[0]
         self.dm_ref = ray.get(ACTORS[0].getattr.remote('dm_ref'))
+        self.reset_dm()
+
+        # DETECTOR PARAMETERS
+        self.CAMSCI = None
+        self.NCAMSCI = 1
+        self.Imax_ref = 1
+
+        self.CAMLO = None
+        self.NCAMLO = 1
 
     def getattr(self, attr):
         return ray.get(self.ACTORS[0].getattr.remote(attr))
@@ -459,7 +484,7 @@ class parallel():
 
         ims = ray.get(pending_ims)
         ims = xp.array(ims)
-        camsci_im = xp.sum(ims, axis=0)
+        camsci_im = xp.sum(ims, axis=0)/self.Imax_ref
 
         return camsci_im
 

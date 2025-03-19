@@ -15,7 +15,7 @@ import purepyindi2
 from purepyindi2 import IndiClient
 
 camsci_path = Path('/opt/MagAOX/rawimages/camsci/')
-camlo_path = Path('/opt/MagAOX/rawimages/camlo/')
+camlo_path = Path('/opt/MagAOX/rawimages/camnsv/')
 dm01_path = Path('/opt/MagAOX/rawimages/dm00disp01/')
 dm02_path = Path('/opt/MagAOX/rawimages/dm00disp02/')
 dm03_path = Path('/opt/MagAOX/rawimages/dm00disp03/')

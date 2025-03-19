@@ -1,6 +1,6 @@
 from .math_module import xp, xcipy, ensure_np_array
 from scoob_llowfsc import utils
-from scoob_llowfsc.imshows import imshow1, imshow2, imshow3
+from scoob_llowfsc.imshows import imshow1, imshow2, imshow3, imshow
 
 import numpy as np
 import astropy.units as u
@@ -8,6 +8,7 @@ import time
 import copy
 from IPython.display import display, clear_output
 import matplotlib.pyplot as plt
+from matplotlib.colors import LogNorm, CenteredNorm, Normalize
 
 # def take_measurement(system_interface, probe_cube, probe_amplitude, return_all=False, pca_modes=None):
 def take_measurement(I, probe_cube, probe_amplitude, channel=3, pca_modes=None, plot=False):
@@ -18,24 +19,25 @@ def take_measurement(I, probe_cube, probe_amplitude, channel=3, pca_modes=None, 
     for i in range(N_probes):
         probe = probe_cube[i]
 
-        I.add_dm(probe_amplitude * probe, channel=channel) # add positive probe
+        I.add_dm(probe_amplitude * probe, ) # add positive probe
         im_pos = I.snap_camsci()
-        I.add_dm(-probe_amplitude * probe, channel=channel) # remove positive probe
-        I.add_dm(-probe_amplitude * probe, channel=channel) # add negative probe
+        I.add_dm(-probe_amplitude * probe, ) # remove positive probe
+        I.add_dm(-probe_amplitude * probe, ) # add negative probe
         im_neg = I.snap_camsci()
-        I.add_dm(probe_amplitude*probe, channel=channel) # remove negative probe
+        I.add_dm(probe_amplitude*probe, ) # remove negative probe
 
         diff_ims.append((im_pos - im_neg) / (2*probe_amplitude))
 
     diff_ims = xp.array(diff_ims)
-    # if pca_modes is not None:
-    #     differential_images = differential_images - (pca_modes.T.dot( pca_modes.dot(differential_images.T) )).T
-    
+
     if plot:
         for i, diff_im in enumerate(diff_ims):
-            imshow2(probe_cube[i], diff_im.reshape(I.npsf, I.npsf), 
-                    f'Probe Command {i+1}', 'Difference Image', pxscl2=I.psf_pixelscale_lamDc,
-                    cmap1='viridis')
+            imshow(
+                [probe_cube[i], diff_im.reshape(I.Ncamsci, I.Ncamsci)], 
+                titles=[f'Probe Command {i+1}', 'Difference Image'], 
+                pxscls=[None, I.camsci_pxscl_lamDc],
+                cmaps=['viridis', 'magma'],
+            )
     
     return diff_ims
     
@@ -70,26 +72,30 @@ def calibrate(
                 calib_amp = calibration_amplitude
 
             # Add the mode to the DMs
-            I.add_dm(s * calib_amp * dm_mode, channel=channel)
+            I.add_dm(s * calib_amp * dm_mode, )
             
             # Compute reponse with difference images of probes
             diff_ims = take_measurement(I, probe_modes, probe_amplitude)
             calib_amps.append(calib_amp)
-            response += s * diff_ims.reshape(Nprobes, I.ncamsci**2) / (2 * calib_amp)
+            response += s * diff_ims.reshape(Nprobes, I.Ncamsci**2) / (2 * calib_amp)
             
             # Remove the mode form the DMs
-            I.add_dm(-s * calib_amp * dm_mode, channel=channel) # remove the mode
+            I.add_dm(-s * calib_amp * dm_mode, ) # remove the mode
         
         print(f"\tCalibrated mode {ci+1:d}/{calibration_modes.shape[0]:d} in {time.time()-start:.3f}s", end='')
         print("\r", end="")
         
         if probe_modes.shape[0]==2:
-            response_matrix.append( xp.concatenate([response[0, control_mask.ravel()],
-                                                    response[1, control_mask.ravel()]]) )
+            response_matrix.append( 
+                xp.concatenate([response[0, control_mask.ravel()],
+                                response[1, control_mask.ravel()]]) 
+            )
         elif probe_modes.shape[0]==3: # if 3 probes are being used
-            response_matrix.append( xp.concatenate([response[0, control_mask.ravel()], 
-                                                    response[1, control_mask.ravel()],
-                                                    response[2, control_mask.ravel()]]) )
+            response_matrix.append( 
+                xp.concatenate([response[0, control_mask.ravel()], 
+                                response[1, control_mask.ravel()],
+                                response[2, control_mask.ravel()]]) 
+                )
         
         response_cube.append(response)
     print('\nCalibration complete.')
@@ -101,12 +107,13 @@ def calibrate(
         dm_response_map = xp.sqrt(xp.mean(xp.square(response_matrix.dot(calibration_modes.reshape(Nmodes, -1))), axis=0))
         dm_response_map = dm_response_map.reshape(I.Nact,I.Nact) / xp.max(dm_response_map)
 
-        fp_response_map = xp.sqrt( xp.mean( xp.abs(response_cube), axis=(0,1))).reshape(I.ncamsci, I.ncamsci)
+        fp_response_map = xp.sqrt( xp.mean( xp.abs(response_cube), axis=(0,1))).reshape(I.Ncamsci, I.Ncamsci)
         fp_response_map = fp_response_map / xp.max(fp_response_map)
-        imshow2(
-            dm_response_map, fp_response_map, 
-            'DM RMS Actuator Responses', 
-            lognorm1=True, vmin1=1e-2,
+        imshow(
+            [dm_response_map, fp_response_map],
+            titles=['DM RMS Actuator Responses', 'Focal Plane Response'], 
+            norms=[LogNorm(1e-2), None],
+            pxscls=[None, I.camsci_pxscl_lamDc], 
         )
             
     return response_matrix, response_cube
@@ -125,7 +132,7 @@ def run(I,
         plot_all=False,
         vmin=1e-9,
         plot_probes=False,
-       ):
+    ):
     
     print('Running iEFC...')
     start = time.time()
@@ -139,16 +146,16 @@ def run(I,
     for i in range(num_iterations):
         print(f"\tClosed-loop iteration {i+starting_itr} / {num_iterations+starting_itr-1}")
         I.subtract_dark = False
-        diff_ims = take_measurement(I, probe_modes, probe_amplitude, channel=channel, plot=plot_probes)
+        diff_ims = take_measurement(I, probe_modes, probe_amplitude, plot=plot_probes)
         measurement_vector = diff_ims[:, control_mask].ravel()
 
         modal_coeff = -control_matrix.dot(measurement_vector)
         # print(modal_matrix.shape, modal_coeff.shape)
 
         del_command = gain * modal_matrix.T.dot(modal_coeff).reshape(I.Nact,I.Nact)
-        total_command = (1.0-leakage)*total_command + del_command
-        # I.add_dm(del_command, channel=channel)
-        I.set_dm(total_command, channel=channel)
+        total_command = (1.0 - leakage)*total_command + del_command
+        # I.add_dm(del_command, )
+        I.set_dm(total_command, )
 
         I.subtract_dark = True
         image_ni = I.snap_camsci()
@@ -161,8 +168,8 @@ def run(I,
     
         if plot_current: 
             if not plot_all: clear_output(wait=True)
-            imshow3(
-                del_command, total_command, image_ni, 
+            imshow(
+                [del_command, total_command, image_ni], 
                 f'Iteration {starting_itr + i:d}: $\delta$DM', 
                 'Total DM Command', 
                 f'Image\nMean NI = {mean_ni:.3e}',

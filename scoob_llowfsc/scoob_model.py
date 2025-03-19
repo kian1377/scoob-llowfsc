@@ -371,7 +371,10 @@ class single():
             return noisy_im/self.NCAMLO
         return camlo_im
 
-import ray
+try:
+    import ray
+except ImportError:
+    print('Could not import ray. Parallelized model unavailble.')
 
 class parallel():
     def __init__(

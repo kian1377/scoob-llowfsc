@@ -1,4 +1,5 @@
 from .math_module import xp, xcipy, ensure_np_array
+from scoob_llowfsc import imshows
 
 import numpy as np
 import scipy
@@ -414,3 +415,78 @@ def generate_wfe(
     wfe_opd *= opd_rms.to_value(u.m)/wfe_rms
 
     return wfe_amp*circ, wfe_opd*circ
+
+import skimage
+
+def measure_center_and_angle(
+        waffle_im, 
+        psf_pixelscale_lamD, 
+        im_thresh=1e-4, 
+        r_thresh=12,
+        verbose=True, 
+        plot=True,
+    ):
+    npsf = waffle_im.shape[0]
+    y,x = (xp.indices((npsf, npsf)) - npsf//2)*psf_pixelscale_lamD
+    r = xp.sqrt(x**2 + y**2)
+    waffle_mask = (waffle_im > im_thresh) * (r>r_thresh)
+
+    centroids = []
+    for i in [0,1]:
+        for j in [0,1]:
+            arr = waffle_im[j*npsf//2:(j+1)*npsf//2, i*npsf//2:(i+1)*npsf//2]
+            mask = waffle_mask[j*npsf//2:(j+1)*npsf//2, i*npsf//2:(i+1)*npsf//2]
+            cent = np.flip(skimage.measure.centroid(ensure_np_array(mask*arr)))
+            cent[0] += i*npsf//2
+            cent[1] += j*npsf//2
+            centroids.append(cent)
+            # print(cent)
+            # imshow3(mask, arr, mask*arr, lognorm2=True,
+            #         patches1=[Circle(cent, 1, fill=True, color='cyan')])
+    centroids.append(centroids[0])
+    centroids = np.array(centroids)
+    centroids[[2,3]] = centroids[[3,2]]
+    if verbose: print('Centroids:\n', centroids)
+
+    if plot: 
+        patches = []
+        for i in range(4):
+            patches.append(Circle(centroids[i], 1, fill=False, color='black'))
+        imshows.imshow3(waffle_mask, waffle_im, waffle_mask*waffle_im, lognorm2=True, vmin2=1e-5, patches1=patches)
+
+    mean_angle = 0.0
+    for i in range(4):
+        angle = np.arctan2(centroids[i+1][1] - centroids[i][1], centroids[i+1][0] - centroids[i][0]) * 180/np.pi
+        if angle<0:
+            angle += 360
+        if 0<angle<90:
+            angle = 90-angle
+        elif 90<angle<180:
+            angle = 180-angle
+        elif 180<angle<270:
+            angle = 270-angle
+        elif 270<angle<360:
+            angle = 360-angle
+        mean_angle += angle/4
+    if verbose: print('Angle: ', mean_angle)
+
+    m1 = (centroids[0][1] - centroids[2][1])/(centroids[0][0] - centroids[2][0])
+    m2 = (centroids[1][1] - centroids[3][1])/(centroids[1][0] - centroids[3][0])
+    # print(m1,m2)
+    b1 = -m1*centroids[0][0] + centroids[0][1]
+    b2 =  -m2*centroids[1][0] + centroids[1][1]
+    # print(b1,b2)
+
+    # m1*x + b1 = m2*x + b2
+    # (m1-m2) * x = b2 - b1
+    xc = (b2 - b1) / (m1 - m2)
+    yc = m1*xc + b1
+    print('Measured center in X: ', xc)
+    print('Measured center in Y: ', yc)
+
+    xshift = np.round(npsf/2 - xc)
+    yshift = np.round(npsf/2 - yc)
+    print('Required shift in X: ', xshift)
+    print('Required shift in Y: ', yshift)
+
+    return xshift,yshift,mean_angle

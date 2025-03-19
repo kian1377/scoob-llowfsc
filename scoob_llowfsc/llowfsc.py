@@ -153,20 +153,30 @@ def single_iteration(
         )
         if clear: clear_output(wait=True)
 
-# def inject_wfe(wfe_time_series, wfe_modes, wfe_stream, interval=75e-6):
-#     Nsamps = wfe_time_series.shape[1]
-#     try:
-#         print('Injecting WFE ...')
-#         i = 0
-#         while i<Nsamps+1:
-#             if i==Nsamps: i = 0
-#             wfe = np.sum( wfe_time_series[:, i, None, None] * wfe_modes, axis=0)
-#             wfe_stream.write(1e6 * wfe)
-#             time.sleep(interval)
-#             i += 1
-#     except KeyboardInterrupt:
-#         print('Stopped injecting WFE.')
-#         wfe_stream.write(np.zeros(wfe_stream.shape))
+def inject_wfe(
+        wfe_time_series, 
+        wfe_modes, 
+        wfe_stream, 
+        interval, 
+        interval_offset=0.0,
+    ):
+    Nsamps = wfe_time_series.shape[1]
+    delay = interval - interval_offset
+    
+    try:
+        print('Injecting WFE ...')
+        i = 0
+        while i<Nsamps+1:
+            wfe = np.sum( wfe_time_series[:, i, None, None] * wfe_modes, axis=0)
+            wfe_stream.write(1e6 * wfe)
+            # print(time)
+            time.sleep(delay)
+            i += 1
+        print('Stopped injecting WFE.')
+        wfe_stream.write(np.zeros(wfe_stream.shape))
+    except KeyboardInterrupt:
+        print('Stopped injecting WFE.')
+        wfe_stream.write(np.zeros(wfe_stream.shape))
 
 
 

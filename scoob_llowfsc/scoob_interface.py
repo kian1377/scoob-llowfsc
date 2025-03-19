@@ -68,11 +68,10 @@ def set_camsci_roi(xc, yc, npix, client, delay=0.25):
     client['camsci.roi_set.request'] = purepyindi.SwitchState.ON
     time.sleep(delay)
 
-def set_fib_atten(self, value, client, delay=0.1):
-        client['fiberatten.atten.target'] = value
-        time.sleep(delay)
-        self.atten = value
-        print(f'Set the fiber attenuation to {value:.1f}')
+def set_fib_atten(value, client, delay=0.1):
+    client['fiberatten.atten.target'] = value
+    time.sleep(delay)
+    print(f'Set the fiber attenuation to {value:.1f}')
 
 def set_camsci_exp_time(exp_time, client, delay=0.25):
     if exp_time<3.2e-5:
@@ -89,6 +88,12 @@ def set_camsci_gain(gain, client, delay=0.1):
     time.sleep(delay)
     print(f'Set the CAMSCI gain setting to {gain:.1f}')
 
+def set_camsci_blacklevel(val, client, delay=0.1):
+    client.wait_for_properties(['camsci.blacklevel'])
+    client['camsci.blacklevel.target'] = val
+    time.sleep(delay)
+    print(f'Set the CAMSCI blacklevel to {val:.1f}')
+
 def normalize_camsci_image(image, im_params, ref_psf_params):
     image_ni = image/ref_psf_params['Imax']
     image_ni *= (ref_psf_params['texp']/im_params['texp'])
@@ -100,14 +105,14 @@ def set_camlo_exp_time(exp_time, client, delay=0.25):
     if exp_time<3.2e-5:
         print('Minimum exposure time is 3.2E-5 seconds. Setting exposure time to minimum.')
         exp_time = 3.2e-5
-    client.wait_for_properties(['camlo.exptime'])
-    client['camlo.exptime.target'] = exp_time
+    client.wait_for_properties(['camnsv.exptime'])
+    client['camnsv.exptime.target'] = exp_time
     time.sleep(delay)
     print(f'Set the CAMLO exposure time to {exp_time:.2e}s')
 
 def set_camlo_gain(gain, client, delay=0.1):
-    client.wait_for_properties(['camlo.emgain'])
-    client['camlo.emgain.target'] = gain
+    client.wait_for_properties(['camnsv.emgain'])
+    client['camnsv.emgain.target'] = gain
     time.sleep(delay)
     print(f'Set the CAMLO gain setting to {gain:.1f}')
 
@@ -133,6 +138,7 @@ class SCOOBI():
         self.lyot_pupil_diam = 9.1e-3
         self.lyot_diam = 8.6e-3
         self.lyot_ratio = self.lyot_diam/self.lyot_pupil_diam
+        self.llowfsc_fl = 200e-3
         self.camsci_pxscl = 4.6e-6
         self.camsci_pxscl_lamDc = 0.307
         self.camlo_pxscl = 3.76e-6
@@ -166,7 +172,7 @@ class SCOOBI():
         self.texp_locam = 1
         self.gain_locam = 1
         
-        self.ref_psf_params = None
+        self.camsci_ref_params = None
         self.dark_frame = None
         self.subtract_dark = False
         self.return_ni = False
@@ -224,7 +230,7 @@ class SCOOBI():
         self.dm_stream.close()
 
     def normalize_camsci(self, image):
-        if self.ref_psf_params is None:
+        if self.camsci_ref_params is None:
             raise ValueError('Cannot normalize because reference PSF not specified.')
         image_ni = image/self.camsci_ref_params['Imax']
         image_ni *= (self.camsci_ref_params['texp']/self.texp)
@@ -245,7 +251,7 @@ class SCOOBI():
             im[im<0] = 0.0
             
         if self.return_ni:
-            im = self.normalize(im)
+            im = self.normalize_camsci(im)
         
         return im
     

@@ -1,6 +1,6 @@
 from .math_module import xp, xcipy, ensure_np_array
 import scoob_llowfsc.utils as utils
-from scoob_llowfsc.imshows import imshow1, imshow2, imshow3
+from scoob_llowfsc.imshows import imshow
 
 import numpy as np
 import astropy.units as u
@@ -9,7 +9,7 @@ from IPython.display import display, clear_output
 import time
 
 import matplotlib.pyplot as plt
-from matplotlib.colors import LogNorm, Normalize
+from matplotlib.colors import LogNorm, Normalize, CenteredNorm
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 
 import threading
@@ -17,10 +17,28 @@ class Process(threading.Timer):
     def run(self):
         while not self.finished.wait(self.interval):  
             self.function(*self.args, **self.kwargs)
+
 # process = Repeat(0.1, print, ['Repeating']) 
 # process.start()
 # time.sleep(5)
 # process.cancel()
+
+def create_control_mask(
+        dims, 
+        irad, 
+        orad,  
+        x_shift=0,
+        y_shift=0,
+        even=True,
+    ):
+    X = np.linspace(-dims[1]/2, dims[1]/2-1, dims[1]) + 1/2 if even else np.linspace(-dims[1]/2, dims[1]/2-1, dims[1])
+    Y = np.linspace(-dims[0]/2, dims[0]/2-1, dims[0]) + 1/2 if even else np.linspace(-dims[0]/2, dims[0]/2-1, dims[0])
+    X = X + x_shift
+    Y = Y + y_shift
+    x,y = np.meshgrid(X,Y)
+    r = np.hypot(x, y)
+    mask = (r > irad) * (r < orad)
+    return mask
 
 def calibrate_without_fsm(
         camlo_stream, 
@@ -58,7 +76,11 @@ def calibrate_without_fsm(
         responses[i] = copy.copy(diff)[control_mask] / (2 * amp)
         
         if plot:
-            imshow3(amp*mode, im_pos, diff, f'Mode {i+1}', 'Absolute Image', 'Difference', cmap1='viridis')
+            imshow(
+                [amp*mode, im_pos, im_neg, diff], 
+                titles=[f'Mode {i+1}', 'Positive Image', 'Negative Image', 'Difference'],
+                cmaps=['viridis', 'magma', 'magma', 'magma'],
+            )
         
         print(f"\tCalibrated mode {i+1:d}/{dm_modes.shape[0]:d} in {time.time()-start:.3f}s", end='')
         print("\r", end="")
@@ -104,24 +126,11 @@ def update_ref_delta(
 # def detect_ref_shear(current_ref, camlo_stream):
 #     return new_ref
 
-def create_control_mask(
-        dims, 
-        irad, 
-        orad,  
-        even=True,
-    ):
-    X = np.linspace(-dims[1]/2, dims[1]/2-1, dims[1]) + 1/2 if even else np.linspace(-dims[1]/2, dims[1]/2-1, dims[1])
-    Y = np.linspace(-dims[0]/2, dims[0]/2-1, dims[0]) + 1/2 if even else np.linspace(-dims[0]/2, dims[0]/2-1, dims[0])
-    x,y = np.meshgrid(X,Y)
-    r = np.hypot(x, y)
-    mask = (r > irad) * (r < orad)
-    return mask
-
 def single_iteration(
         dm_lo_stream,
         camlo_stream,
         camlo_ref_stream,
-        camlo_delta_stream,  
+        camlo_ref_offset_stream,  
         gains_stream,
         leak_stream, 
         control_matrix, 
@@ -133,7 +142,7 @@ def single_iteration(
     ):
 
     image = camlo_stream.grab_latest()
-    del_im = image - (camlo_ref_stream.grab_latest() + camlo_delta_stream.grab_latest())
+    del_im = image - (camlo_ref_stream.grab_latest() + camlo_ref_offset_stream.grab_latest())
 
     # compute the DM command with the image based on the time delayed wavefront
     modal_coeff = -control_matrix.dot( del_im[control_mask] )
@@ -144,12 +153,10 @@ def single_iteration(
     dm_lo_stream.write(total_command * 1e6)
 
     if plot:
-        imshow3(
-            del_im, del_dm_command, total_command, 
-            'Measured Difference Image', 
-            'Computed DM Correction',
-            'DM Command', 
-            cmap1='magma', cmap2='viridis', cmap3='viridis',
+        imshow(
+            [del_im, del_dm_command, total_command], 
+            titles=['Measured Difference Image', 'Computed DM Correction', 'Total DM Command'], 
+            cmaps=['magma', 'viridis', 'viridis'],
         )
         if clear: clear_output(wait=True)
 

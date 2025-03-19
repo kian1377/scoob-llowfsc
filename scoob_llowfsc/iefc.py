@@ -65,11 +65,7 @@ def calibrate(
         response = 0
         for s in [-1, 1]: # We need a + and - probe to estimate the jacobian
             dm_mode = calibration_mode.reshape(I.Nact, I.Nact)
-
-            if scale_factors is not None: 
-                calib_amp = calibration_amplitude * scale_factors[ci]
-            else:
-                calib_amp = calibration_amplitude
+            calib_amp = calibration_amplitude * scale_factors[ci] if scale_factors is not None else calibration_amplitude
 
             # Add the mode to the DMs
             I.add_dm(s * calib_amp * dm_mode, )
@@ -114,6 +110,7 @@ def calibrate(
             titles=['DM RMS Actuator Responses', 'Focal Plane Response'], 
             norms=[LogNorm(1e-2), None],
             pxscls=[None, I.camsci_pxscl_lamDc], 
+            cmaps=['plasma', 'magma'],
         )
             
     return response_matrix, response_cube
@@ -154,7 +151,6 @@ def run(I,
 
         del_command = gain * modal_matrix.T.dot(modal_coeff).reshape(I.Nact,I.Nact)
         total_command = (1.0 - leakage)*total_command + del_command
-        # I.add_dm(del_command, )
         I.set_dm(total_command, )
 
         I.subtract_dark = True
@@ -170,11 +166,12 @@ def run(I,
             if not plot_all: clear_output(wait=True)
             imshow(
                 [del_command, total_command, image_ni], 
-                f'Iteration {starting_itr + i:d}: $\delta$DM', 
-                'Total DM Command', 
-                f'Image\nMean NI = {mean_ni:.3e}',
-                cmap1='viridis', cmap2='viridis', 
-                pxscl3=I.camsci_pxscl_lamDc, lognorm3=True, vmin3=vmin,
+                titles=[f'Iteration {starting_itr + i:d}: $\delta$DM', 
+                        'Total DM Command', 
+                        f'Normalized Image\nMean Contrast = {mean_ni:.3e}'],
+                cmaps=['viridis', 'viridis', 'magma'],
+                pxscls=[None, None, I.camsci_pxscl_lamDc],
+                norms=[CenteredNorm(), None, LogNorm(vmin=vmin)],
             )
     
     print('Closed loop for given control matrix completed in {:.3f}s.'.format(time.time()-start))

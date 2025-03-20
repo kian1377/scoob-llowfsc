@@ -66,10 +66,9 @@ def calibrate_without_fsm(
         dm_lo_stream.write(amp*mode*1e6)
         time.sleep(dm_delay)
         im_pos = np.mean( camlo_stream.grab_many(NFRAMES), axis=0 )
-        dm_lo_stream.write(-2*amp*mode*1e6)
+        dm_lo_stream.write(-amp*mode*1e6)
         time.sleep(dm_delay)
         im_neg = np.mean( camlo_stream.grab_many(NFRAMES), axis=0 )
-        dm_lo_stream.write(amp*mode*1e6)
 
         diff = im_pos - im_neg
         response_cube[i] = copy.copy(diff) / (2 * amp)
@@ -77,13 +76,17 @@ def calibrate_without_fsm(
         
         if plot:
             imshow(
-                [amp*mode, im_pos, im_neg, diff], 
-                titles=[f'Mode {i+1}', 'Positive Image', 'Negative Image', 'Difference'],
-                cmaps=['viridis', 'magma', 'magma', 'magma'],
+                [amp*mode, diff], 
+                titles=[f'Mode {i+1}', 'Difference'],
+                cmaps=['viridis', 'magma'],
+                # wspace=0.5,
+                # figsize=(20,5),
             )
         
         print(f"\tCalibrated mode {i+1:d}/{dm_modes.shape[0]:d} in {time.time()-start:.3f}s", end='')
         print("\r", end="")
+    
+    dm_lo_stream.write(np.zeros_like(mode))
 
     response_matrix = responses.T
 
@@ -108,16 +111,16 @@ def make_shear_chops(ref_locam_im, control_mask, shear_pix=1, order=3, central_d
     if plot: imshow2(shear_chops[0], shear_chops[1])
     return shear_chops
 
-def update_ref_delta(
+def update_ref_offset(
         response_matrix, 
         modal_matrix, 
         control_mask, 
         dm_dh_stream, 
-        camlo_delta_stream,
+        camlo_ref_offset_stream,
     ):
-    del_ref_im = np.zeros(camlo_delta_stream.shape)
+    del_ref_im = np.zeros(camlo_ref_offset_stream.shape)
     del_ref_im[control_mask] = response_matrix.dot(modal_matrix.dot(1e-6*dm_dh_stream.grab_latest().ravel())/1024)
-    camlo_delta_stream.write(del_ref_im)
+    camlo_ref_offset_stream.write(del_ref_im)
     return
 
 # import skimage
@@ -141,7 +144,7 @@ def single_iteration(
         Nact=34,
     ):
 
-    image = camlo_stream.grab_latest()
+    image = camlo_stream.grab_latest() * control_mask
     del_im = image - (camlo_ref_stream.grab_latest() + camlo_ref_offset_stream.grab_latest())
 
     # compute the DM command with the image based on the time delayed wavefront

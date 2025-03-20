@@ -54,6 +54,30 @@ def move_block_out(client, delay=2):
     client['stagelinear.presetName.block_out'] = purepyindi.SwitchState.ON
     time.sleep(delay)
 
+def set_camlo_roi(xc, vcropoffset, client, delay=0.25):
+    # update roi parameters
+    client.wait_for_properties(['camnsv.roi_region_x', 'camnsv.vcropoffset', 'camnsv.roi_set'])
+    client['camnsv.roi_region_x.target'] = xc
+    client['camnsv.vcropoffset.target'] = vcropoffset
+    time.sleep(delay)
+    client['camnsv.roi_set.request'] = purepyindi.SwitchState.ON
+    time.sleep(delay)
+    print('Set CAMLO ROI.')
+
+def set_camlo_blacklevel(val, client, delay=0.25):
+    # update roi parameters
+    client.wait_for_properties(['camnsv.blacklevel'])
+    client['camnsv.blacklevel.target'] = val
+    time.sleep(delay)
+    print('Set CAMLO blacklevel.')
+
+def set_camsci_blacklevel(val, client, delay=0.25):
+    # update roi parameters
+    client.wait_for_properties(['camsci.blacklevel'])
+    client['camsci.blacklevel.target'] = val
+    time.sleep(delay)
+    print('Set CAMSCI blacklevel.')
+
 def set_camsci_roi(xc, yc, npix, client, delay=0.25):
     # update roi parameters
     client.wait_for_properties(['camsci.roi_region_x', 'camsci.roi_region_y', 
@@ -67,6 +91,7 @@ def set_camsci_roi(xc, yc, npix, client, delay=0.25):
     time.sleep(delay)
     client['camsci.roi_set.request'] = purepyindi.SwitchState.ON
     time.sleep(delay)
+    print('Set CAMSCI ROI.')
 
 def set_fib_atten(value, client, delay=0.1):
     client['fiberatten.atten.target'] = value
@@ -115,6 +140,12 @@ def set_camlo_gain(gain, client, delay=0.1):
     client['camnsv.emgain.target'] = gain
     time.sleep(delay)
     print(f'Set the CAMLO gain setting to {gain:.1f}')
+
+def make_dm_mask(Nact=34):
+    y,x = (xp.indices((Nact, Nact)) - Nact//2 + 1/2)
+    r = xp.sqrt(x**2 + y**2)
+    dm_mask = r<(Nact/2 + 1/2)
+    return dm_mask
 
 class SCOOBI():
 

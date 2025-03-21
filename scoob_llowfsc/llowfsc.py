@@ -176,7 +176,7 @@ def inject_wfe(
     try:
         print('Injecting WFE ...')
         i = 0
-        while i<Nsamps+1:
+        while i<Nsamps:
             wfe = np.sum( wfe_time_series[:, i, None, None] * wfe_modes, axis=0)
             wfe_stream.write(1e6 * wfe)
             # print(time)

@@ -54,36 +54,14 @@ def move_block_out(client, delay=2):
     client['stagelinear.presetName.block_out'] = purepyindi.SwitchState.ON
     time.sleep(delay)
 
-def set_camlo_roi(xc, vcropoffset, client, delay=0.25):
-    # update roi parameters
-    client.wait_for_properties(['camnsv.roi_region_x', 'camnsv.vcropoffset', 'camnsv.roi_set'])
-    client['camnsv.roi_region_x.target'] = xc
-    client['camnsv.vcropoffset.target'] = vcropoffset
-    time.sleep(delay)
-    client['camnsv.roi_set.request'] = purepyindi.SwitchState.ON
-    time.sleep(delay)
-    print('Set CAMLO ROI.')
-
-def set_camlo_blacklevel(val, client, delay=0.25):
-    # update roi parameters
-    client.wait_for_properties(['camnsv.blacklevel'])
-    client['camnsv.blacklevel.target'] = val
-    time.sleep(delay)
-    print('Set CAMLO blacklevel.')
-
-def set_camsci_blacklevel(val, client, delay=0.25):
-    # update roi parameters
-    client.wait_for_properties(['camsci.blacklevel'])
-    client['camsci.blacklevel.target'] = val
-    time.sleep(delay)
-    print('Set CAMSCI blacklevel.')
-
 def set_camsci_roi(xc, yc, npix, client, delay=0.25):
     # update roi parameters
-    client.wait_for_properties(['camsci.roi_region_x', 'camsci.roi_region_y', 
-                                'camsci.roi_region_h' ,'camsci.roi_region_w', 
-                                # 'camsci.roi_region_bin_x' ,'camsci.roi_region_bin_y', 
-                                'camsci.roi_set'])
+    client.wait_for_properties([
+        'camsci.roi_region_x', 'camsci.roi_region_y', 
+        'camsci.roi_region_h' ,'camsci.roi_region_w', 
+        # 'camsci.roi_region_bin_x' ,'camsci.roi_region_bin_y', 
+        'camsci.roi_set'
+    ])
     client['camsci.roi_region_x.target'] = xc
     client['camsci.roi_region_y.target'] = yc
     client['camsci.roi_region_h.target'] = npix
@@ -126,6 +104,16 @@ def normalize_camsci_image(image, im_params, ref_psf_params):
     image_ni *= 10**(-im_params['gain']/20 * 0.1) / 10**(-ref_psf_params['gain']/20 * 0.1)
     return image_ni
 
+def set_camlo_roi(xc, vcropoffset, client, delay=0.25):
+    # update roi parameters
+    client.wait_for_properties(['camnsv.roi_region_x', 'camnsv.vcropoffset', 'camnsv.roi_set'])
+    client['camnsv.roi_region_x.target'] = xc
+    client['camnsv.vcropoffset.target'] = vcropoffset
+    time.sleep(delay)
+    client['camnsv.roi_set.request'] = purepyindi.SwitchState.ON
+    time.sleep(delay)
+    print('Set CAMLO ROI.')
+
 def set_camlo_exp_time(exp_time, client, delay=0.25):
     if exp_time<3.2e-5:
         print('Minimum exposure time is 3.2E-5 seconds. Setting exposure time to minimum.')
@@ -140,6 +128,13 @@ def set_camlo_gain(gain, client, delay=0.1):
     client['camnsv.emgain.target'] = gain
     time.sleep(delay)
     print(f'Set the CAMLO gain setting to {gain:.1f}')
+
+def set_camlo_blacklevel(val, client, delay=0.25):
+    # update roi parameters
+    client.wait_for_properties(['camnsv.blacklevel'])
+    client['camnsv.blacklevel.target'] = val
+    time.sleep(delay)
+    print('Set CAMLO blacklevel.')
 
 def make_dm_mask(Nact=34):
     y,x = (xp.indices((Nact, Nact)) - Nact//2 + 1/2)

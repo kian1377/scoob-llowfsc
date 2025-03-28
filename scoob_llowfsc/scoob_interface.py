@@ -54,6 +54,12 @@ def move_block_out(client, delay=2):
     client['stagelinear.presetName.block_out'] = purepyindi.SwitchState.ON
     time.sleep(delay)
 
+def set_fib_atten(value, client, delay=0.1):
+    client['fiberatten.atten.target'] = value
+    time.sleep(delay)
+    print(f'Set the fiber attenuation to {value:.1f}')
+
+# CAMSCI Functions
 def set_camsci_roi(xc, yc, npix, client, delay=0.25):
     # update roi parameters
     client.wait_for_properties([
@@ -70,11 +76,6 @@ def set_camsci_roi(xc, yc, npix, client, delay=0.25):
     client['camsci.roi_set.request'] = purepyindi.SwitchState.ON
     time.sleep(delay)
     print('Set CAMSCI ROI.')
-
-def set_fib_atten(value, client, delay=0.1):
-    client['fiberatten.atten.target'] = value
-    time.sleep(delay)
-    print(f'Set the fiber attenuation to {value:.1f}')
 
 def set_camsci_exp_time(exp_time, client, delay=0.25):
     if exp_time<3.2e-5:
@@ -97,20 +98,21 @@ def set_camsci_blacklevel(val, client, delay=0.1):
     time.sleep(delay)
     print(f'Set the CAMSCI blacklevel to {val:.1f}')
 
-def normalize_camsci_image(image, im_params, ref_psf_params):
-    image_ni = image/ref_psf_params['Imax']
-    image_ni *= (ref_psf_params['texp']/im_params['texp'])
-    image_ni *= 10**((im_params['atten']-ref_psf_params['atten'])/10)
-    image_ni *= 10**(-im_params['gain']/20 * 0.1) / 10**(-ref_psf_params['gain']/20 * 0.1)
-    return image_ni
-
-def set_camlo_roi(xc, vcropoffset, client, delay=0.25):
+# CAMLO Functions
+def set_camlo_roi(xc, yc, npix, client, delay=0.25):
     # update roi parameters
-    client.wait_for_properties(['camnsv.roi_region_x', 'camnsv.vcropoffset', 'camnsv.roi_set'])
-    client['camnsv.roi_region_x.target'] = xc
-    client['camnsv.vcropoffset.target'] = vcropoffset
+    client.wait_for_properties([
+        'camlo.roi_region_x', 'camlo.roi_region_y', 
+        'camlo.roi_region_h' ,'camlo.roi_region_w', 
+        # 'camlo.roi_region_bin_x' ,'camlo.roi_region_bin_y', 
+        'camlo.roi_set'
+    ])
+    client['camlo.roi_region_x.target'] = xc
+    client['camlo.roi_region_y.target'] = yc
+    client['camlo.roi_region_h.target'] = npix
+    client['camlo.roi_region_w.target'] = npix
     time.sleep(delay)
-    client['camnsv.roi_set.request'] = purepyindi.SwitchState.ON
+    client['camlo.roi_set.request'] = purepyindi.SwitchState.ON
     time.sleep(delay)
     print('Set CAMLO ROI.')
 
@@ -118,23 +120,61 @@ def set_camlo_exp_time(exp_time, client, delay=0.25):
     if exp_time<3.2e-5:
         print('Minimum exposure time is 3.2E-5 seconds. Setting exposure time to minimum.')
         exp_time = 3.2e-5
-    client.wait_for_properties(['camnsv.exptime'])
-    client['camnsv.exptime.target'] = exp_time
+    client.wait_for_properties(['camlo.exptime'])
+    client['camlo.exptime.target'] = exp_time
     time.sleep(delay)
     print(f'Set the CAMLO exposure time to {exp_time:.2e}s')
 
 def set_camlo_gain(gain, client, delay=0.1):
-    client.wait_for_properties(['camnsv.emgain'])
-    client['camnsv.emgain.target'] = gain
+    client.wait_for_properties(['camlo.emgain'])
+    client['camlo.emgain.target'] = gain
     time.sleep(delay)
     print(f'Set the CAMLO gain setting to {gain:.1f}')
 
-def set_camlo_blacklevel(val, client, delay=0.25):
-    # update roi parameters
-    client.wait_for_properties(['camnsv.blacklevel'])
-    client['camnsv.blacklevel.target'] = val
+def set_camlo_blacklevel(val, client, delay=0.1):
+    client.wait_for_properties(['camlo.blacklevel'])
+    client['camlo.blacklevel.target'] = val
     time.sleep(delay)
-    print('Set CAMLO blacklevel.')
+    print(f'Set the CAMLO blacklevel to {val:.1f}')
+
+# def set_camlo_roi(xc, vcropoffset, client, delay=0.25):
+#     # update roi parameters
+#     client.wait_for_properties(['camnsv.roi_region_x', 'camnsv.vcropoffset', 'camnsv.roi_set'])
+#     client['camnsv.roi_region_x.target'] = xc
+#     client['camnsv.vcropoffset.target'] = vcropoffset
+#     time.sleep(delay)
+#     client['camnsv.roi_set.request'] = purepyindi.SwitchState.ON
+#     time.sleep(delay)
+#     print('Set CAMLO ROI.')
+
+# def set_camlo_exp_time(exp_time, client, delay=0.25):
+#     if exp_time<3.2e-5:
+#         print('Minimum exposure time is 3.2E-5 seconds. Setting exposure time to minimum.')
+#         exp_time = 3.2e-5
+#     client.wait_for_properties(['camnsv.exptime'])
+#     client['camnsv.exptime.target'] = exp_time
+#     time.sleep(delay)
+#     print(f'Set the CAMLO exposure time to {exp_time:.2e}s')
+
+# def set_camlo_gain(gain, client, delay=0.1):
+#     client.wait_for_properties(['camnsv.emgain'])
+#     client['camnsv.emgain.target'] = gain
+#     time.sleep(delay)
+#     print(f'Set the CAMLO gain setting to {gain:.1f}')
+
+# def set_camlo_blacklevel(val, client, delay=0.25):
+#     # update roi parameters
+#     client.wait_for_properties(['camnsv.blacklevel'])
+#     client['camnsv.blacklevel.target'] = val
+#     time.sleep(delay)
+#     print('Set CAMLO blacklevel.')
+
+def normalize_camsci_image(image, im_params, ref_psf_params):
+    image_ni = image/ref_psf_params['Imax']
+    image_ni *= (ref_psf_params['texp']/im_params['texp'])
+    image_ni *= 10**((im_params['atten']-ref_psf_params['atten'])/10)
+    image_ni *= 10**(-im_params['gain']/20 * 0.1) / 10**(-ref_psf_params['gain']/20 * 0.1)
+    return image_ni
 
 def make_dm_mask(Nact=34):
     y,x = (xp.indices((Nact, Nact)) - Nact//2 + 1/2)
@@ -215,22 +255,22 @@ class SCOOBI():
         self.atten = value
         print(f'Set the fiber attenuation to {value:.1f}')
 
-    def set_camsci_exp_time(self, exp_time, client, delay=0.25):
+    def set_camsci_exp_time(self, exp_time, client, camsci_name='camsci', delay=0.25):
         if exp_time<3.2e-5:
             print('Minimum exposure time is 3.2E-5 seconds. Setting exposure time to minimum.')
             exp_time = 3.2e-5
-        client.wait_for_properties(['camsci.exptime'])
-        client['camsci.exptime.target'] = exp_time
+        client.wait_for_properties([f'{camsci_name}.exptime'])
+        client[f'{camsci_name}.exptime.target'] = exp_time
         time.sleep(delay)
         self.texp = exp_time
-        print(f'Set the ZWO exposure time to {self.texp:.2e}s')
+        print(f'Set the CAMSCI exposure time to {self.texp:.2e}s')
 
-    def set_camsci_gain(self, gain, client, delay=0.1):
-        client.wait_for_properties(['camsci.emgain'])
-        client['camsci.emgain.target'] = gain
+    def set_camsci_gain(self, gain, client, camsci_name='camsci', delay=0.1):
+        client.wait_for_properties([f'{camsci_name}.emgain'])
+        client[f'{camsci_name}.emgain.target'] = gain
         time.sleep(delay)
         self.gain = gain
-        print(f'Set the ZWO gain setting to {gain:.1f}')
+        print(f'Set the CAMSCI gain setting to {gain:.1f}')
     
     def zero_dm(self):
         self.dm_stream.write(np.zeros(self.dm_shape))

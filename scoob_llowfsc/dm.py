@@ -9,6 +9,12 @@ from astropy.io import fits
 import poppy
 import pickle
 
+def make_mask(Nact=34):
+    y,x = xp.indices((Nact, Nact)) - Nact//2 + 1/2
+    r = xp.hypot(x, y)
+    mask = r < (Nact/2 + 1/2)
+    return mask
+
 def make_gaussian_inf_fun(act_spacing=300e-6, sampling=10, coupling=0.15, Nact=4):
     ng = int(sampling*Nact)
     pxscl = act_spacing/(sampling)

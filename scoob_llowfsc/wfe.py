@@ -1,4 +1,5 @@
 from .math_module import xp, xcipy, ensure_np_array
+from scoob_llowfsc import utils
 
 import numpy as np
 import scipy
@@ -6,10 +7,51 @@ import astropy.units as u
 import copy
 import matplotlib.pyplot as plt
 
-def generate_freqs(Nf=2**18+1, 
-                   f_min=0*u.Hz, 
-                   f_max=1000*u.Hz,
-                   ):
+import poppy
+
+def generate_wfe(
+        npix=1000, 
+        oversample=1, 
+        wavelength=500*u.nm,
+        opd_index=2.5, 
+        amp_index=2.5, 
+        opd_seed=1234, 
+        amp_seed=12345,
+        opd_rms=10*u.nm, 
+        amp_rms=0.05,
+        remove_opd_modes=3,
+        remove_amp_modes=3, # defaults to removing piston, tip, and tilt
+    ):
+    diam = 10*u.mm
+    wf = poppy.FresnelWavefront(beam_radius=diam/2, npix=npix, oversample=oversample, wavelength=wavelength)
+    wfe_amp = poppy.StatisticalPSDWFE(index=amp_index, wfe=amp_rms*u.nm, radius=diam/2, seed=amp_seed).get_opd(wf)
+    wfe_opd = poppy.StatisticalPSDWFE(index=opd_index, wfe=opd_rms, radius=diam/2, seed=opd_seed).get_opd(wf)
+    circ = poppy.CircularAperture(radius=diam/2).get_transmission(wf)
+    bmask = circ>0
+    
+    wfe_amp = xp.asarray(wfe_amp)
+    wfe_opd = xp.asarray(wfe_opd)
+
+    Zs = poppy.zernike.arbitrary_basis(circ, nterms=remove_amp_modes, outside=0)
+    Zc_amp = utils.lstsq(Zs, wfe_amp)
+    for i in range(remove_amp_modes):
+        wfe_amp -= Zc_amp[i] * Zs[i]
+    wfe_amp = wfe_amp*1e9 + 1
+
+    Zs = poppy.zernike.arbitrary_basis(circ, nterms=remove_opd_modes, outside=0)
+    Zc_opd = lstsq(Zs, wfe_opd)
+    for i in range(remove_opd_modes):
+        wfe_opd -= Zc_opd[i] * Zs[i]
+    wfe_rms = xp.sqrt( xp.mean( xp.square( wfe_opd[bmask] )))
+    wfe_opd *= opd_rms.to_value(u.m)/wfe_rms
+
+    return wfe_amp*circ, wfe_opd*circ
+
+def generate_freqs(
+        Nf=2**18+1, 
+        f_min=0*u.Hz, 
+        f_max=1000*u.Hz,
+    ):
     """_summary_
 
     Parameters
@@ -35,7 +77,12 @@ def generate_freqs(Nf=2**18+1,
     times = xp.linspace(0, (Nt-1)*del_t, Nt)
     return freqs, times
 
-def kneePSD(freqs, beta, fn, alpha):
+def kneePSD(
+        freqs, 
+        beta, 
+        fn, 
+        alpha
+    ):
     psd = beta/(1+freqs/fn)**alpha
     try:
         psd.decompose()
@@ -43,7 +90,12 @@ def kneePSD(freqs, beta, fn, alpha):
     except:
         return psd
 
-def generate_time_series(psd, f_max, rms=None,  seed=123,):
+def generate_time_series(
+        psd, 
+        f_max, 
+        rms=None,  
+        seed=123,
+    ):
     Nf = len(psd)
     Nt = 2*(Nf-1)
     del_t = (1/(2*f_max)).to(u.s)

@@ -1,13 +1,18 @@
 from .math_module import xp, xcipy, ensure_np_array
-from scoob_llowfsc import utils
-import scoob_llowfsc.props as props
-from scoob_llowfsc.imshows import imshow1, imshow2, imshow3, imshow
+from scoob_llowfsc import utils, dm, props
 
 import numpy as np
 import astropy.units as u
 import copy
 import poppy
 from scipy.signal import windows
+
+from matplotlib.colors import LogNorm, Normalize, CenteredNorm
+
+try:
+    import ray
+except ImportError:
+    print('Could not import ray. Parallelized model unavailble.')
 
 class single():
 
@@ -100,7 +105,7 @@ class single():
         self.act_spacing = 300e-6
         self.dm_pxscl = self.dm_beam_diam / self.npix
         self.inf_sampling = self.act_spacing / self.dm_pxscl
-        self.inf_fun = utils.make_gaussian_inf_fun(
+        self.inf_fun = dm.make_gaussian_inf_fun(
             act_spacing=self.act_spacing, 
             sampling=self.inf_sampling, 
             coupling=0.15, 
@@ -156,6 +161,8 @@ class single():
         self.CAMLO = None
         self.NCAMLO = 1
         self.camlo_shear = None
+
+        self.camsci_shear = None
 
     def getattr(self, attr):
         return getattr(self, attr)
@@ -245,96 +252,85 @@ class single():
         pupil_wf_lres = props.ifft(fp_wf_lres)
         pupil_wf_lres = utils.pad_or_crop(pupil_wf_lres, N) # crop to the desired wavefront dimension
         if plot: 
-            imshow2(
-                xp.abs(pupil_wf_lres), xp.angle(pupil_wf_lres), 
-                'FFT Lyot Pupil Amplitude', 'FFT Lyot Pupil Phase', 
-                npix=int(self.plot_oversample*self.npix), cmap2='twilight', 
+            utils.imshow(
+                [xp.abs(pupil_wf_lres), xp.angle(pupil_wf_lres)], 
+                titles=['FFT Lyot Pupil Amplitude', 'FFT Lyot Pupil Phase'], 
+                npix=[int(self.plot_oversample*self.npix)]*2, 
+                cmaps=['magma', 'twilight'], 
             )
 
         fp_wf_hres = props.mft_forward(pupwf, self.npix, self.N_vortex_hres, self.hres_sampling, convention='-')
         fp_wf_hres *= self.vortex_hres * self.hres_window * self.hres_dot_mask # apply high res (windowed) FPM
         pupil_wf_hres = props.mft_reverse(fp_wf_hres, self.hres_sampling, self.npix, N, convention='+')
         if plot: 
-            imshow2(
-                xp.abs(pupil_wf_hres), xp.angle(pupil_wf_hres), 
-                'MFT Lyot Pupil Amplitude', 'MFT Lyot Pupil Phase',
-                npix=int(self.plot_oversample*self.npix), cmap2='twilight', 
+            utils.imshow(
+                [xp.abs(pupil_wf_hres), xp.angle(pupil_wf_hres)], 
+                titles=['MFT Lyot Pupil Amplitude', 'MFT Lyot Pupil Phase'], 
+                npix=[int(self.plot_oversample*self.npix)]*2, 
+                cmaps=['magma', 'twilight'], 
             )
 
         post_vortex_pup_wf = (pupil_wf_lres + pupil_wf_hres)
         if plot: 
-            imshow2(
-                xp.abs(post_vortex_pup_wf), xp.angle(post_vortex_pup_wf), 
-                'Total Lyot Pupil Amplitude', 'Total Lyot Pupil Phase',
-                npix=int(self.plot_oversample*self.npix), cmap2='twilight', 
+            utils.imshow(
+                [xp.abs(post_vortex_pup_wf), xp.angle(post_vortex_pup_wf)], 
+                titles=['Total Lyot Pupil Amplitude', 'Total Lyot Pupil Phase'], 
+                npix=[int(self.plot_oversample*self.npix)]*2, 
+                cmaps=['magma', 'twilight'], 
             )
 
         return post_vortex_pup_wf
 
-    def calc_wfs_camsci(self, return_all=True, plot=False): # method for getting the PSF in photons
+    def calc_wfs_camsci(self, return_all=True): # method for getting the PSF in photons
         FSM_PHASOR = xp.exp(1j * 4*xp.pi/self.wavelength * self.FSM_OPD )
         PREFPM_WFE = self.PREFPM_AMP * xp.exp(1j * 2*xp.pi/self.wavelength * self.PREFPM_OPD )
         E_EP =  self.APERTURE.astype(complex) * PREFPM_WFE * FSM_PHASOR
         E_EP = utils.pad_or_crop(E_EP, self.N)
-        if plot: imshow2(xp.abs(E_EP), xp.angle(E_EP), 'EP WF', cmap2='twilight', npix=int(self.plot_oversample*self.npix))
 
         DM_PHASOR = self.compute_dm_phasor()
         E_DM = E_EP * DM_PHASOR
-        if plot: imshow2(xp.abs(E_DM), xp.angle(E_DM), 'After DM WF', cmap2='twilight', npix=int(self.plot_oversample*self.npix))
-        # print(E_DM.shape)
 
         if self.use_vortex: 
-            E_LP = self.apply_vortex(E_DM, plot=plot)
+            E_LP = self.apply_vortex(E_DM)
         else: 
             E_LP = copy.copy(E_DM)
-        # print(E_LP.shape)
 
         POSTFPM_WFE = self.POSTFPM_AMP * xp.exp(1j * 2*xp.pi/self.wavelength * self.POSTFPM_OPD )
         E_LP =  E_LP * utils.pad_or_crop(POSTFPM_WFE, E_LP.shape[0])
-        if plot: imshow2(xp.abs(E_LP), xp.angle(E_LP), 'At Lyot Pupil WF', cmap2='twilight', npix=int(self.plot_oversample*self.npix))
 
         E_LS = E_LP * utils.pad_or_crop(self.LYOT, E_LP.shape[0]).astype(complex)
-        if plot: imshow2(xp.abs(E_LS), xp.angle(E_LS), 'After Lyot Stop WF', cmap2='twilight', npix=int(self.plot_oversample*self.npix))
 
         E_CAMSCI = props.mft_forward(E_LS, self.npix*self.lyot_ratio, self.ncamsci, self.camsci_pxscl_lamD)
-        if plot: imshow2(xp.abs(E_CAMSCI)**2, xp.angle(E_CAMSCI), 'CAMSCI WF', lognorm1=1, cmap2='twilight',)
-
+        if self.camsci_shear is not None: # shift the CAMLO image to simulate detector lateral shift
+            E_CAMSCI = xcipy.ndimage.shift(E_CAMSCI, (self.camsci_shear[1], self.camsci_shear[0]), order=3)
+ 
         if return_all:
             return E_EP, DM_PHASOR, E_DM, E_LP, E_LS, E_CAMSCI
         else:
             return E_CAMSCI
     
-    def calc_wfs_camlo(self, return_all=True, plot=False): # method for getting the PSF in photons
+    def calc_wfs_camlo(self, return_all=True): # method for getting the PSF in photons
         FSM_PHASOR = xp.exp(1j * 4*xp.pi/self.wavelength * self.FSM_OPD )
         PREFPM_WFE = self.PREFPM_AMP * xp.exp(1j * 2*xp.pi/self.wavelength * self.PREFPM_OPD )
         E_EP =  self.APERTURE.astype(complex) * PREFPM_WFE * FSM_PHASOR
         E_EP = utils.pad_or_crop(E_EP, self.N)
-        if plot: imshow2(xp.abs(E_EP), xp.angle(E_EP), 'EP WF', cmap2='twilight', npix=int(self.plot_oversample*self.npix))
 
         DM_PHASOR = self.compute_dm_phasor()
         E_DM = E_EP * DM_PHASOR
-        if plot: imshow2(xp.abs(E_DM), xp.angle(E_DM), 'After DM WF', cmap2='twilight', npix=int(self.plot_oversample*self.npix))
-        
+
         if self.use_vortex: 
             E_DM = utils.pad_or_crop(E_DM, self.Nrls)
-            E_LP = self.apply_vortex(E_DM, plot=plot)
+            E_LP = self.apply_vortex(E_DM)
         else: 
             E_LP = copy.copy(E_DM)
         # print(E_LP.shape)
 
         E_LP = props.ang_spec(E_LP, self.wavelength, -self.d_oap_ls, self.lyot_pupil_diam/self.npix)
-        if plot: imshow2(xp.abs(E_LP), xp.angle(E_LP), 'Back Prop to OAP WF', cmap2='twilight', npix=int(self.plot_oversample*self.npix))
         E_LP *= utils.pad_or_crop(self.OAP_AP, E_LP.shape[0])
-        if plot: imshow2(xp.abs(E_LP), xp.angle(E_LP), 'After OAP Aperture WF', cmap2='twilight', npix=int(self.plot_oversample*self.npix))
         E_LP = props.ang_spec(E_LP, self.wavelength, self.d_oap_ls, self.lyot_pupil_diam/self.npix)
-        if plot: imshow2(xp.abs(E_LP), xp.angle(E_LP), 'Back to Lyot Pupil WF', cmap2='twilight', npix=int(self.plot_oversample*self.npix))
         
         RLS_WFE = self.RLS_AMP * xp.exp(1j * 2*xp.pi/self.wavelength * self.RLS_OPD )
         E_RLS =  E_LP * utils.pad_or_crop(self.RLS, E_LP.shape[0]).astype(complex) * utils.pad_or_crop(RLS_WFE, E_LP.shape[0])
-        if plot: imshow2(xp.abs(E_RLS), xp.angle(E_RLS), 'At RLS WF', cmap2='twilight', npix=int(self.plot_oversample*self.npix))
-
-        # E_RLS = E_LP * utils.pad_or_crop(self.RLS, E_LP.shape[0]).astype(complex)
-        # if plot: imshow2(xp.abs(E_RLS), xp.angle(E_RLS), 'After RLS WF', cmap2='twilight')
 
         # Use TF and MFT to propagate to defocused image
         self.llowfsc_fnum = self.llowfsc_fl/self.lyot_diam
@@ -347,8 +343,7 @@ class single():
         E_CAMLO = props.mft_forward(camlo_tf*E_RLS, self.npix*self.lyot_ratio, self.ncamlo, self.camlo_pxscl_lamD)
         if self.camlo_shear is not None: # shift the CAMLO image to simulate detector lateral shift
             E_CAMLO = xcipy.ndimage.shift(E_CAMLO, (self.camlo_shear[1], self.camlo_shear[0]), order=3)
-        if plot: imshow2(xp.abs(E_CAMLO)**2, xp.angle(E_CAMLO), cmap2='twilight',)
-            
+ 
         if return_all:
             return E_EP, DM_PHASOR, E_DM, E_LP, E_RLS, E_CAMLO
         else:
@@ -371,11 +366,6 @@ class single():
             return noisy_im/self.NCAMLO
         return camlo_im
 
-try:
-    import ray
-except ImportError:
-    print('Could not import ray. Parallelized model unavailble.')
-
 class parallel():
     def __init__(
             self,
@@ -384,24 +374,6 @@ class parallel():
 
         self.ACTORS = ACTORS
         self.Nactors = len(ACTORS)
-
-        # self.wavelength_c = 633e-9
-        # self.total_pupil_diam = 2.4 # assumed total telescope diameter
-        # self.fsm_beam_diam = 7.1e-3
-        # self.dm_beam_diam = 9.1e-3 # as measured in the Fresnel model
-        # self.lyot_pupil_diam = 9.1e-3
-        # self.lyot_diam = 8.6e-3
-        # self.lyot_ratio = self.lyot_diam/self.lyot_pupil_diam
-        # self.rls_diam = 25.4e-3
-        # self.d_oap_ls = 150e-3
-        # self.imaging_fl = 140e-3
-        # self.llowfsc_fl = 200e-3
-        # self.llowfsc_fnum = self.llowfsc_fl/self.lyot_diam
-        # self.llowfsc_defocus = 2.75e-3
-        # self.camsci_pxscl = 4.6e-6
-        # self.camsci_pxscl_lamDc = 0.307
-        # self.camlo_pxscl = 3.76e-6
-        # self.camlo_pxscl_lamDc = self.camlo_pxscl / (self.llowfsc_fl * self.wavelength_c / self.lyot_pupil_diam)
 
         self.wavelength_c = self.getattr('wavelength_c')
         self.total_pupil_diam = self.getattr('total_pupil_diam')

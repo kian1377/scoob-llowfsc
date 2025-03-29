@@ -59,6 +59,47 @@ def set_fib_atten(value, client, delay=0.1):
     time.sleep(delay)
     print(f'Set the fiber attenuation to {value:.1f}')
 
+# CAMERA Functions
+def set_cam_roi(xc, yc, npix, client, cam_name='camsci', bin_mode=2, delay=0.25):
+    # update roi parameters
+    client.wait_for_properties([
+        f'{cam_name}.roi_region_x', f'{cam_name}.roi_region_y', 
+        f'{cam_name}.roi_region_h' , f'{cam_name}.roi_region_w', 
+        f'{cam_name}.roi_region_bin_x', f'{cam_name}.roi_region_bin_y', 
+        f'{cam_name}.roi_set'
+    ])
+    client[f'{cam_name}.roi_region_bin_x.target'] = bin_mode
+    client[f'{cam_name}.roi_region_bin_y.target'] = bin_mode
+    client[f'{cam_name}.roi_region_x.target'] = xc
+    client[f'{cam_name}.roi_region_y.target'] = yc
+    client[f'{cam_name}.roi_region_h.target'] = npix
+    client[f'{cam_name}.roi_region_w.target'] = npix
+    time.sleep(delay)
+    client[f'{cam_name}.roi_set.request'] = purepyindi.SwitchState.ON
+    time.sleep(delay)
+    print(f'Set {cam_name} ROI.')
+
+def set_cam_exp_time(exp_time, client, cam_name='camsci', delay=0.25):
+    if exp_time<3.2e-5:
+        print('Minimum exposure time is 3.2E-5 seconds. Setting exposure time to minimum.')
+        exp_time = 3.2e-5
+    client.wait_for_properties([f'{cam_name}.exptime'])
+    client[f'{cam_name}.exptime.target'] = exp_time
+    time.sleep(delay)
+    print(f'Set the {cam_name} exposure time to {exp_time:.2e}s')
+
+def set_cam_gain(gain, client, cam_name='camsci', delay=0.1):
+    client.wait_for_properties(['camsci.emgain'])
+    client['camsci.emgain.target'] = gain
+    time.sleep(delay)
+    print(f'Set the {cam_name} gain setting to {gain:.1f}')
+
+def set_cam_blacklevel(val, client, cam_name='camsci', delay=0.1):
+    client.wait_for_properties([f'{cam_name}.blacklevel'])
+    client[f'{cam_name}.blacklevel.target'] = val
+    time.sleep(delay)
+    print(f'Set the {cam_name} blacklevel to {val:.1f}')
+
 # CAMSCI Functions
 def set_camsci_roi(xc, yc, npix, client, delay=0.25):
     # update roi parameters
@@ -172,7 +213,7 @@ def set_camlo_blacklevel(val, client, delay=0.1):
 def normalize_camsci_image(image, im_params, ref_psf_params):
     image_ni = image/ref_psf_params['Imax']
     image_ni *= (ref_psf_params['texp']/im_params['texp'])
-    image_ni *= 10**((im_params['atten']-ref_psf_params['atten'])/10)
+    image_ni *= 10**( (im_params['atten']-ref_psf_params['atten']) / 10)
     image_ni *= 10**(-im_params['gain']/20 * 0.1) / 10**(-ref_psf_params['gain']/20 * 0.1)
     return image_ni
 
@@ -183,7 +224,6 @@ def make_dm_mask(Nact=34):
     return dm_mask
 
 class SCOOBI():
-
     def __init__(
             self, 
             dm_channel,

@@ -1,7 +1,7 @@
 from .math_module import xp, xcipy, ensure_np_array
 from scoob_llowfsc import utils
 from scoob_llowfsc import scoob_interface as scoobi
-from scoob_llowfsc.imshows import imshow1, imshow2, imshow3
+from scoob_llowfsc.imshows import imshow1, imshow2, imshow3, imshow
 
 import numpy as np
 import astropy.units as u
@@ -9,6 +9,7 @@ import time
 import copy
 from IPython.display import display, clear_output
 import matplotlib.pyplot as plt
+from matplotlib.colors import LogNorm, Normalize, CenteredNorm
 
 # def take_measurement(system_interface, probe_cube, probe_amplitude, return_all=False, pca_modes=None):
 def take_measurement(
@@ -19,12 +20,13 @@ def take_measurement(
         probe_amplitude, 
         probe_modes,
         NCAMSCI=10,
-        plot=False):
+        plot=False
+    ):
     
     Ncamsci = camsci_stream.shape[0]
     Nprobes = probe_modes.shape[0]
 
-    current_command = dm_stream.grab_latest()*1e-6
+    current_command = dm_stream.grab_latest() * 1e-6
     
     diff_ims = []
     ims = []
@@ -39,17 +41,19 @@ def take_measurement(
         im_neg = np.mean(camsci_stream.grab_many(NCAMSCI), axis=0)
         im_neg_ni = scoobi.normalize_camsci_image(im_neg, im_params, ref_psf_params)
 
-        diff_ims.append((im_pos_ni - im_neg_ni) / (2*probe_amplitude))
+        diff_im = (im_pos_ni - im_neg_ni) / (2 * probe_amplitude)
+        diff_ims.append( diff_im )
 
     diff_ims = xp.array(diff_ims)
     dm_stream.write( current_command * 1e6 )
 
     if plot:
         for i, diff_im in enumerate(diff_ims):
-            imshow2(
-                probe_modes[i], diff_im.reshape(Ncamsci, Ncamsci), 
-                f'Probe Command {i+1}', 'Difference Image',
-                cmap1='viridis')
+            imshow(
+                [probe_modes[i], diff_im], 
+                titles=[f'Probe Command {i+1}', 'Difference Image'],
+                cmaps=['viridis', 'magma'], 
+            )
     
     return diff_ims
     
@@ -80,11 +84,11 @@ def calibrate(
     
     # Loop through all modes that you want to control
     start = time.time()
-    for ci, calibration_mode in enumerate(calibration_modes):
+    for i, calibration_mode in enumerate(calibration_modes):
         response = 0
         for s in [-1, 1]: # We need a + and - probe to estimate the jacobian
             dm_mode = calibration_mode.reshape(Nact, Nact)
-            amp = calibration_amplitude * scale_factors[ci] if scale_factors is not None else calibration_amplitude
+            amp = calibration_amplitude * scale_factors[i] if scale_factors is not None else calibration_amplitude
             calib_mode = ensure_np_array(amp * dm_mode)
 
             dm_stream.write( (current_command + s * calib_mode) * 1e6)
@@ -101,7 +105,7 @@ def calibrate(
             
             dm_stream.write( (current_command - s * calib_mode) * 1e6) # Remove the mode from the DMs
         
-        print(f"\tCalibrated mode {ci+1:d}/{calibration_modes.shape[0]:d} in {time.time()-start:.3f}s", end='')
+        print(f"\tCalibrated mode {i+1:d}/{calibration_modes.shape[0]:d} in {time.time()-start:.3f}s", end='')
         print("\r", end="")
         
         if probe_modes.shape[0]==2:
@@ -124,19 +128,19 @@ def calibrate(
 
         fp_response_map = xp.sqrt( xp.mean( xp.abs(response_cube), axis=(0,1))).reshape(Ncamsci, Ncamsci)
         fp_response_map = fp_response_map / xp.max(fp_response_map)
-        imshow2(
-            dm_response_map, fp_response_map, 
-            'DM RMS Actuator Responses', 
-            lognorm1=True, vmin1=1e-2,
+        imshow(
+            [dm_response_map, fp_response_map], 
+            titles=['DM Response Map', 'Focal Plane Response Map'],
+            norms=[LogNorm(1e-2), None]
         )
             
     return response_matrix, response_cube
     
-def run(camsci_stream,
+def run(iefc_data,
+        camsci_stream,
         dm_stream,
         im_params,
         ref_psf_params, 
-        data_dict,
         control_matrix,
         probe_amplitude, 
         probe_modes, 
@@ -151,32 +155,32 @@ def run(camsci_stream,
         plot_all=False,
         vmin=1e-9,
         NCAMSCI=10, 
-       ):
+    ):
     
     print('Running iEFC...')
     start = time.time()
-    starting_itr = len(data_dict['images'])
+    starting_itr = len(iefc_data['images'])
 
     Nact = probe_modes.shape[1]
     Nmodes = calibration_modes.shape[0]
     modal_matrix = calibration_modes.reshape(Nmodes, -1).T
 
-    total_command = copy.copy(data_dict['commands'][-1]) if len(data_dict['commands'])>0 else xp.zeros((Nact,Nact))
+    total_command = copy.copy(iefc_data['commands'][-1]) if len(iefc_data['commands'])>0 else xp.zeros((Nact,Nact))
 
     for i in range(num_iterations):
         print(f"\tClosed-loop iteration {i+starting_itr} / {num_iterations+starting_itr-1}")
         diff_ims = take_measurement(
-                camsci_stream, 
-                dm_stream, 
-                probe_modes, 
-                probe_amplitude, 
-                NCAMSCI=NCAMSCI,
-            )
+            camsci_stream, 
+            dm_stream, 
+            probe_modes, 
+            probe_amplitude, 
+            NCAMSCI=NCAMSCI,
+        )
         measurement_vector = diff_ims[:, control_mask].ravel()
 
         modal_coeff = -control_matrix.dot(measurement_vector)
         del_command = gain * modal_matrix.dot(modal_coeff).reshape(Nact,Nact)
-        total_command = (1.0-leakage) * total_command + del_command
+        total_command = (1.0 - leakage) * total_command + del_command
         
         dm_stream.write( total_command * 1e6 )
 
@@ -184,11 +188,11 @@ def run(camsci_stream,
         image_ni = scoobi.normalize_camsci_image(new_image, im_params, ref_psf_params)
         mean_ni = xp.mean(image_ni[control_mask])
 
-        data['raw_images']
-        data['images'].append(copy.copy(image_ni))
-        data['contrasts'].append(copy.copy(mean_ni))
-        data['commands'].append(copy.copy(total_command))
-        data['del_commands'].append(copy.copy(del_command))
+        iefc_data['raw_images']
+        iefc_data['images'].append(copy.copy(image_ni))
+        iefc_data['contrasts'].append(copy.copy(mean_ni))
+        iefc_data['commands'].append(copy.copy(total_command))
+        iefc_data['del_commands'].append(copy.copy(del_command))
     
         if plot_current: 
             if not plot_all: clear_output(wait=True)

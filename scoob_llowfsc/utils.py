@@ -184,7 +184,27 @@ def create_circ_mask(h, w, center=None, radius=None):
     mask = dist_from_center <= radius
     return mask
 
-# Creating focal plane masks
+def create_annular_mask(
+        N, 
+        pixelscale, 
+        irad, 
+        orad,  
+        edge=None,
+        x_shift=0,
+        y_shift=0,
+        rotation=0,
+    ):
+    x = (xp.linspace(-N/2, N/2-1, N) + 1/2) * pixelscale
+    x,y = xp.meshgrid(x,x)
+    r = xp.hypot(x, y)
+    mask = (r > irad) * (r < orad)
+    if edge is not None: mask *= (x > edge)
+    
+    mask = xcipy.ndimage.rotate(mask, rotation, reshape=False, order=0)
+    mask = xcipy.ndimage.shift(mask, (y_shift, x_shift), order=0)
+        
+    return mask
+
 def create_annular_focal_plane_mask(
         npsf, 
         psf_pixelscale, 
@@ -232,7 +252,15 @@ def create_fourier_modes(
     nfg = int(xp.round(npsf * psf_pixelscale_lamD/fourier_sampling))
     if nfg%2==1: nfg += 1
     yf, xf = (xp.indices((nfg, nfg)) - nfg//2 + 1/2) * fourier_sampling
-    fourier_cm = create_annular_focal_plane_mask(nfg, fourier_sampling, iwa-fourier_sampling, owa+fourier_sampling, edge=iwa-fourier_sampling, rotation=rotation)
+    # fourier_cm = create_annular_focal_plane_mask(nfg, fourier_sampling, iwa-fourier_sampling, owa+fourier_sampling, edge=iwa-fourier_sampling, rotation=rotation)
+    fourier_cm = create_annular_mask(
+        nfg, 
+        fourier_sampling, 
+        iwa-fourier_sampling, 
+        owa+fourier_sampling, 
+        edge=iwa-fourier_sampling, 
+        rotation=rotation,
+    )
     ypp, xpp = (xp.indices((Nact, Nact)) - Nact//2 + 1/2)
 
     sampled_fs = xp.array([xf[fourier_cm], yf[fourier_cm]]).T
@@ -383,11 +411,15 @@ def plot_radial_contrast(im, mask, pixelscale, nbins=30, cenyx=None, xlims=None,
     display(fig)
     
 def generate_wfe(
-        npix=1000, oversample=1, 
+        npix=1000, 
+        oversample=1, 
         wavelength=500*u.nm,
-        opd_index=2.5, amp_index=2, 
-        opd_seed=1234, amp_seed=12345,
-        opd_rms=10*u.nm, amp_rms=0.05,
+        opd_index=2.5, 
+        amp_index=2.5, 
+        opd_seed=1234, 
+        amp_seed=12345,
+        opd_rms=10*u.nm, 
+        amp_rms=0.05,
         remove_opd_modes=3,
         remove_amp_modes=3, # defaults to removing piston, tip, and tilt
     ):

@@ -7,10 +7,13 @@ from astropy.io import fits
 import poppy
 import pickle
 
+import skimage
+
 import matplotlib.pyplot as plt
 plt.rcParams['image.origin'] = 'lower'
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 from matplotlib.colors import LogNorm, Normalize, CenteredNorm
+from matplotlib.patches import Circle, Rectangle
 from IPython.display import display, clear_output
 
 def mean(array, mask=None):
@@ -320,7 +323,7 @@ def create_annular_mask(
     
     mask = xcipy.ndimage.rotate(mask, rotation, reshape=False, order=0)
     mask = xcipy.ndimage.shift(mask, (y_shift, x_shift), order=0)
-        
+    
     return mask
 
 def create_annular_focal_plane_mask(
@@ -560,9 +563,12 @@ def measure_waffle_center_and_angle(
 
     if plot: 
         patches = []
-        for i in range(4):
-            patches.append(Circle(centroids[i], 1, fill=False, color='black'))
-        imshows.imshow3(waffle_mask, waffle_im, waffle_mask*waffle_im, lognorm2=True, vmin2=1e-5, patches1=patches)
+        for i in range(4): patches.append(Circle(centroids[i], 1, fill=False, color='black'))
+        imshow(
+            [waffle_mask, waffle_im, waffle_mask*waffle_im], 
+            norms=[LogNorm(np.max(waffle_im)/1e4)],
+            all_patches=[patches],
+        )
 
     mean_angle = 0.0
     for i in range(4):
@@ -599,7 +605,7 @@ def measure_waffle_center_and_angle(
     print('Required shift in X: ', xshift)
     print('Required shift in Y: ', yshift)
 
-    return xshift,yshift,mean_angle
+    return xshift, yshift, mean_angle
 
 
 

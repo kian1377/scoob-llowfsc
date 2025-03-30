@@ -17,9 +17,10 @@ def take_measurement(
         dm_stream, 
         im_params,
         ref_psf_params,
-        probe_amplitude, 
         probe_modes,
-        NCAMSCI=10,
+        probe_amplitude, 
+        NFRAMES=10,
+        delay=0.01,
         plot=False
     ):
     
@@ -34,14 +35,14 @@ def take_measurement(
         probe = ensure_np_array(probe_amplitude * probe_modes[i])
 
         dm_stream.write( (current_command + probe) * 1e6 )
-        im_pos = np.mean(camsci_stream.grab_many(NCAMSCI), axis=0)
-        im_pos_ni = scoobi.normalize_camsci_image(im_pos, im_params, ref_psf_params)
+        time.sleep(delay)
+        im_pos = scoobi.snap(camsci_stream, NFRAMES, 0, im_params, ref_psf_params)
 
         dm_stream.write( (current_command - probe) * 1e6 )
-        im_neg = np.mean(camsci_stream.grab_many(NCAMSCI), axis=0)
-        im_neg_ni = scoobi.normalize_camsci_image(im_neg, im_params, ref_psf_params)
+        time.sleep(delay)
+        im_neg = scoobi.snap(camsci_stream, NFRAMES, 0, im_params, ref_psf_params)
 
-        diff_im = (im_pos_ni - im_neg_ni) / (2 * probe_amplitude)
+        diff_im = (im_pos - im_neg) / (2 * probe_amplitude)
         diff_ims.append( diff_im )
 
     diff_ims = xp.array(diff_ims)
@@ -65,7 +66,8 @@ def calibrate(
         probe_modes, 
         calibration_amplitude, 
         calibration_modes,
-        NCAMSCI=10,
+        NFRAMES=10,
+        delay=0.01,
         scale_factors=None, 
         plot_responses=False, 
     ):
@@ -92,13 +94,15 @@ def calibrate(
             calib_mode = ensure_np_array(amp * dm_mode)
 
             dm_stream.write( (current_command + s * calib_mode) * 1e6)
+            time.sleep(delay)
             # Compute reponse with difference images of probes
             diff_ims = take_measurement(
                 camsci_stream, 
                 dm_stream, 
                 probe_modes, 
                 probe_amplitude, 
-                NCAMSCI=NCAMSCI,
+                NFRAMES=NFRAMES,
+                delay=delay,
             )
             calib_amps.append(amp)
             response += s * diff_ims.reshape(Nprobes, Ncamsci**2) / (2 * amp)
@@ -144,17 +148,17 @@ def run(iefc_data,
         control_matrix,
         probe_amplitude, 
         probe_modes, 
-        calibration_modes,
+        modal_matrix,
         control_mask,
         dark_frame, 
-        channel=3,
+        NFRAMES=10, 
+        delay=0.01,
         num_iterations=3,
         gain=0.75, 
         leakage=0.0,
         plot_current=True,
         plot_all=False,
         vmin=1e-9,
-        NCAMSCI=10, 
     ):
     
     print('Running iEFC...')
@@ -162,51 +166,51 @@ def run(iefc_data,
     starting_itr = len(iefc_data['images'])
 
     Nact = probe_modes.shape[1]
-    Nmodes = calibration_modes.shape[0]
-    modal_matrix = calibration_modes.reshape(Nmodes, -1).T
+    Nmodes = modal_matrix.shape[1]
 
     total_command = copy.copy(iefc_data['commands'][-1]) if len(iefc_data['commands'])>0 else xp.zeros((Nact,Nact))
 
     for i in range(num_iterations):
-        print(f"\tClosed-loop iteration {i+starting_itr} / {num_iterations+starting_itr-1}")
+        print(f"\tRunning iteration {i+starting_itr} / {num_iterations+starting_itr-1}")
         diff_ims = take_measurement(
             camsci_stream, 
             dm_stream, 
             probe_modes, 
             probe_amplitude, 
-            NCAMSCI=NCAMSCI,
+            NFRAMES=NFRAMES,
+            delay=delay,
         )
         measurement_vector = diff_ims[:, control_mask].ravel()
 
         modal_coeff = -control_matrix.dot(measurement_vector)
-        del_command = gain * modal_matrix.dot(modal_coeff).reshape(Nact,Nact)
+        del_command = gain * modal_matrix.dot(modal_coeff).reshape(Nact, Nact)
         total_command = (1.0 - leakage) * total_command + del_command
         
         dm_stream.write( total_command * 1e6 )
+        time.sleep(delay)
 
-        new_image = np.mean(camsci_stream.grab_many(NCAMSCI), axis=0)
-        image_ni = scoobi.normalize_camsci_image(new_image, im_params, ref_psf_params)
-        mean_ni = xp.mean(image_ni[control_mask])
+        image_ni = scoobi.snap(camsci_stream, NFRAMES, dark_frame, im_params, ref_psf_params)
+        contrast = xp.mean(image_ni[control_mask])
 
-        iefc_data['raw_images']
         iefc_data['images'].append(copy.copy(image_ni))
-        iefc_data['contrasts'].append(copy.copy(mean_ni))
+        iefc_data['contrasts'].append(copy.copy(contrast))
         iefc_data['commands'].append(copy.copy(total_command))
         iefc_data['del_commands'].append(copy.copy(del_command))
     
         if plot_current: 
             if not plot_all: clear_output(wait=True)
-            imshow3(
-                del_command, total_command, image_ni, 
-                f'Iteration {starting_itr + i:d}: $\delta$DM', 
-                'Total DM Command', 
-                f'Image\nMean NI = {mean_ni:.3e}',
-                cmap1='viridis', cmap2='viridis', 
-                pxscl3=sysi.camsci_pxscl_lamDc, lognorm3=True, vmin3=vmin,
+            utils.imshow(
+                [del_command, total_command, image_ni], 
+                titles=[f'Iteration {starting_itr + i:d}: $\delta$DM', 
+                        'Total DM Command', 
+                        f'Normalized Image\nMean Contrast = {contrast:.3e}'],
+                cmaps=['viridis', 'viridis', 'magma'],
+                pxscls=[None, None, None],
+                norms=[CenteredNorm(), None, LogNorm(vmin=vmin)],
             )
-    
-    print('Closed loop for given control matrix completed in {:.3f}s.'.format(time.time()-start))
-    return data
+
+    print(f'Completed {num_iterations:d} in {time.time()-start:.3f}s.')
+    return iefc_data
 
 def compute_hadamard_scale_factors(had_modes, scale_exp=1/6, scale_thresh=4, iwa=2.5, owa=13, oversamp=4, plot=False):
     Nact = had_modes.shape[1]

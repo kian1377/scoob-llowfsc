@@ -110,7 +110,7 @@ def set_camnsv_roi(xc, vcropoffset, client, delay=0.25):
     time.sleep(delay)
     print('Set CAMLO ROI.')
 
-def get_im_params(client, client0, cam_name='camsci'):
+def get_im_params(client0, client, cam_name='camsci'):
     client0.wait_for_properties([f'{cam_name}.exptime', f'{cam_name}.emgain', ])
     exp_time = client[f'{cam_name}.exptime.target']
     gain = client[f'{cam_name}.emgain.current']
@@ -123,22 +123,31 @@ def get_im_params(client, client0, cam_name='camsci'):
     }
     return im_params
 
-def snap(cam_stream, NFRAMES=1):
-    im = np.mean(cam_stream.grab_many(NFRAMES), axis=0)
-    return im
-
-def normalize_camsci_image(image, im_params, ref_psf_params):
-    image_ni = image/ref_psf_params['Imax']
-    image_ni *= (ref_psf_params['texp']/im_params['texp'])
-    image_ni *= 10**( (im_params['atten']-ref_psf_params['atten']) / 10)
+def normalize_image(image, im_params, ref_psf_params):
+    image_ni = image / ref_psf_params['Iref']
+    image_ni *= ref_psf_params['texp'] / im_params['texp']
+    image_ni *= 10**( (im_params['atten'] - ref_psf_params['atten']) / 10)
     image_ni *= 10**(-im_params['gain']/20 * 0.1) / 10**(-ref_psf_params['gain']/20 * 0.1)
     return image_ni
 
-def make_dm_mask(Nact=34):
-    y,x = (xp.indices((Nact, Nact)) - Nact//2 + 1/2)
-    r = xp.sqrt(x**2 + y**2)
-    dm_mask = r<(Nact/2 + 1/2)
-    return dm_mask
+def snap(cam_stream, NFRAMES=1, dark=0, im_params=None, ref_psf_params=None):
+    im = np.mean(cam_stream.grab_many(NFRAMES), axis=0) - dark
+    if im_params is not None and ref_psf_params is not None: 
+        im = normalize_image(im, im_params, ref_psf_params)
+    return im
+
+def zero_dm(dm_stream, delay=0.01):
+    dm_stream.write( np.zeros((34,34)) )
+    time.sleep(delay)
+
+def set_dm(dm_stream, dm_command, delay=0.01):
+    dm_stream.write( 1e6*ensure_np_array(dm_command) )
+    time.sleep(delay)
+
+def add_dm(dm_stream, dm_command, delay=0.01):
+    current_command = dm_stream.grab_latest()
+    dm_stream.write( current_command + 1e6*ensure_np_array(dm_command) )
+    time.sleep(delay)
 
 class SCOOBI():
     def __init__(

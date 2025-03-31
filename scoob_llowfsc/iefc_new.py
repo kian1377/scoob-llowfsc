@@ -45,12 +45,12 @@ def take_measurement(
         diff_im = (im_pos - im_neg) / (2 * probe_amplitude)
         diff_ims.append( diff_im )
 
-    diff_ims = xp.array(diff_ims)
+    diff_ims = np.array(diff_ims)
     dm_stream.write( current_command * 1e6 )
 
     if plot:
         for i, diff_im in enumerate(diff_ims):
-            imshow(
+            utils.imshow(
                 [probe_modes[i], diff_im], 
                 titles=[f'Probe Command {i+1}', 'Difference Image'],
                 cmaps=['viridis', 'magma'], 
@@ -66,6 +66,8 @@ def calibrate(
         probe_modes, 
         calibration_amplitude, 
         calibration_modes,
+        im_params,
+        ref_psf_params, 
         NFRAMES=10,
         delay=0.01,
         scale_factors=None, 
@@ -99,7 +101,9 @@ def calibrate(
             diff_ims = take_measurement(
                 camsci_stream, 
                 dm_stream, 
-                probe_modes, 
+                im_params,
+                ref_psf_params,
+                probe_modes,
                 probe_amplitude, 
                 NFRAMES=NFRAMES,
                 delay=delay,
@@ -112,27 +116,28 @@ def calibrate(
         print(f"\tCalibrated mode {i+1:d}/{calibration_modes.shape[0]:d} in {time.time()-start:.3f}s", end='')
         print("\r", end="")
         
+        dm_stream.write( current_command * 1e6 )
         if probe_modes.shape[0]==2:
-            response_matrix.append( xp.concatenate([response[0, control_mask.ravel()],
+            response_matrix.append( np.concatenate([response[0, control_mask.ravel()],
                                                     response[1, control_mask.ravel()]]) )
         elif probe_modes.shape[0]==3: # if 3 probes are being used
-            response_matrix.append( xp.concatenate([response[0, control_mask.ravel()], 
+            response_matrix.append( np.concatenate([response[0, control_mask.ravel()], 
                                                     response[1, control_mask.ravel()],
                                                     response[2, control_mask.ravel()]]) )
         
         response_cube.append(response)
     print('\nCalibration complete.')
 
-    response_matrix = xp.array(response_matrix).T # this is the response matrix to be inverted
-    response_cube = xp.array(response_cube)
+    response_matrix = np.array(response_matrix).T # this is the response matrix to be inverted
+    response_cube = np.array(response_cube)
     
     if plot_responses:
-        dm_response_map = xp.sqrt(xp.mean(xp.square(response_matrix.dot(calibration_modes.reshape(Nmodes, -1))), axis=0))
-        dm_response_map = dm_response_map.reshape(Nact,Nact) / xp.max(dm_response_map)
+        dm_response_map = np.sqrt(np.mean(np.square(response_matrix.dot(calibration_modes.reshape(Nmodes, -1))), axis=0))
+        dm_response_map = dm_response_map.reshape(Nact,Nact) / np.max(dm_response_map)
 
-        fp_response_map = xp.sqrt( xp.mean( xp.abs(response_cube), axis=(0,1))).reshape(Ncamsci, Ncamsci)
-        fp_response_map = fp_response_map / xp.max(fp_response_map)
-        imshow(
+        fp_response_map = np.sqrt( np.mean( np.abs(response_cube), axis=(0,1))).reshape(Ncamsci, Ncamsci)
+        fp_response_map = fp_response_map / np.max(fp_response_map)
+        utils.imshow(
             [dm_response_map, fp_response_map], 
             titles=['DM Response Map', 'Focal Plane Response Map'],
             norms=[LogNorm(1e-2), None]
@@ -143,13 +148,13 @@ def calibrate(
 def run(iefc_data,
         camsci_stream,
         dm_stream,
-        im_params,
-        ref_psf_params, 
         control_matrix,
         probe_amplitude, 
         probe_modes, 
         modal_matrix,
         control_mask,
+        im_params,
+        ref_psf_params, 
         dark_frame, 
         NFRAMES=10, 
         delay=0.01,
@@ -175,7 +180,9 @@ def run(iefc_data,
         diff_ims = take_measurement(
             camsci_stream, 
             dm_stream, 
-            probe_modes, 
+            im_params,
+            ref_psf_params,
+            probe_modes,
             probe_amplitude, 
             NFRAMES=NFRAMES,
             delay=delay,
@@ -190,7 +197,7 @@ def run(iefc_data,
         time.sleep(delay)
 
         image_ni = scoobi.snap(camsci_stream, NFRAMES, dark_frame, im_params, ref_psf_params)
-        contrast = xp.mean(image_ni[control_mask])
+        contrast = np.mean(image_ni[control_mask])
 
         iefc_data['images'].append(copy.copy(image_ni))
         iefc_data['contrasts'].append(copy.copy(contrast))
@@ -250,4 +257,67 @@ def compute_hadamard_scale_factors(had_modes, scale_exp=1/6, scale_thresh=4, iwa
 
     return scale_factors
 
+import matplotlib.pyplot as plt
+plt.rcParams['image.origin'] = 'lower'
+from mpl_toolkits.axes_grid1 import make_axes_locatable
+from matplotlib.colors import LogNorm, Normalize, CenteredNorm
+from IPython.display import display, clear_output
+
+def plot_data_with_ref(
+        data, 
+        im1vmin=1e-9, im1vmax=1e-4,
+        im2vmin=1e-9, im2vmax=1e-4, 
+        vmin=1e-9, vmax=1e-4, 
+        xticks=None,
+        exp_name='',
+        fname=None,
+    ):
+    ims = ensure_np_array( xp.array(data['images']) ) 
+    control_mask = ensure_np_array( data['control_mask'] )
+    # print(type(control_mask))
+    Nitr = ims.shape[0]
+    npsf = ims.shape[1]
+    psf_pixelscale_lamD = data['pixelscale']
+
+    mean_nis = np.mean(ims[:,control_mask], axis=1)
+    ibest = np.argmin(mean_nis)
+    ref_im = ensure_np_array(data['images'][0])
+    best_im = ensure_np_array(data['images'][ibest])
+
+    fig,ax = plt.subplots(nrows=1, ncols=3, figsize=(15,10), dpi=125, gridspec_kw={'width_ratios': [1, 1, 1], })
+    ext = psf_pixelscale_lamD*npsf/2
+    extent = [-ext, ext, -ext, ext]
+
+    w = 0.225
+    im1 = ax[0].imshow(ref_im, norm=LogNorm(vmax=im1vmax, vmin=im1vmin), cmap='magma', extent=extent)
+    ax[0].set_title(f'Initial Image:\nMean Contrast = {mean_nis[0]:.2e}', fontsize=14)
+    divider = make_axes_locatable(ax[0])
+    cax = divider.append_axes("right", size="4%", pad=0.075)
+    cbar = fig.colorbar(im1, cax=cax)
+    cbar.ax.set_ylabel('NI', rotation=0, labelpad=7)
+    ax[0].set_position([0, 0, w, w]) # [left, bottom, width, height]
+
+    im2 = ax[1].imshow( best_im, norm=LogNorm(vmax=im2vmax, vmin=im2vmin), cmap='magma', extent=extent)
+    ax[1].set_title('Best Iteration' + exp_name + f':\nMean Contrast = {mean_nis[ibest]:.2e}', fontsize=14)
+    divider = make_axes_locatable(ax[1])
+    cax = divider.append_axes("right", size="4%", pad=0.075)
+    cbar = fig.colorbar(im2, cax=cax,)
+    cbar.ax.set_ylabel('NI', rotation=0, labelpad=7)
+    ax[1].set_position([0.23, 0, w, w])
+
+    ax[0].set_ylabel('Y [$\lambda/D$]', fontsize=12, labelpad=-5)
+    ax[0].set_xlabel('X [$\lambda/D$]', fontsize=12, labelpad=5)
+    ax[1].set_xlabel('X [$\lambda/D$]', fontsize=12, labelpad=5)
+
+    ax[2].set_title('Mean Contrast per Iteration' + exp_name, fontsize=14)
+    ax[2].semilogy(mean_nis, label='3.6% Bandpass')
+    ax[2].grid()
+    ax[2].set_xlabel('Iteration Number', fontsize=12, )
+    ax[2].set_ylabel('Mean Contrast', fontsize=14, labelpad=1)
+    ax[2].set_ylim([vmin, vmax])
+    xticks = np.arange(0,Nitr,2) if xticks is None else xticks
+    ax[2].set_xticks(xticks)
+    ax[2].set_position([0.525, 0, 0.3, w])
+
+    if fname is not None: fig.savefig(fname, format='pdf', bbox_inches="tight")
 

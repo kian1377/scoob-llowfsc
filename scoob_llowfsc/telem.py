@@ -62,3 +62,25 @@ def unpack_data(telem_path, data_path):
     subprocess.run(['xrif2fits', '-d', str(telem_path), '-D', str(data_path)])
     clear_output()
 
+from astropy.io import fits
+
+def read_telem_data(data_fnames, absolute=False):
+    data = []
+    data_times = []
+    for fname in data_fnames:
+        data.append(fits.getdata(fname))
+        t_hr = float(fname.split("_")[1][8:10])
+        t_min = float(fname.split("_")[1][10:12])
+        t_sec = float(fname.split("_")[1][12:-5])/1e9
+        data_times.append( 3600*t_hr + 60*t_min + t_sec )
+
+    data = np.array(data) 
+    data_times = np.array(data_times)
+
+    if not absolute: 
+        start_time = data_times[0]
+        data_times = data_times - start_time
+
+    return data, data_times 
+
+    

@@ -283,13 +283,16 @@ def TikhonovInverse(A, rcond=1e-15):
     s_inv = s/(s**2 + (rcond * s.max())**2)
     return (Vt.T * s_inv).dot(U.T)
 
-def beta_reg(S, beta=-1):
+def beta_reg(S, beta=-1, return_np=False):
     # S is the sensitivity matrix also known as the Jacobian
+    if return_np: S = xp.array(S)
     sts = xp.matmul(S.T, S)
     rho = xp.diag(sts)
     alpha2 = rho.max()
 
     control_matrix = xp.matmul( xp.linalg.inv( sts + alpha2*10.0**(beta) * xp.eye(sts.shape[0]) ), S.T)
+    if return_np:
+        control_matrix = ensure_np_array(control_matrix)
     return control_matrix
 
 def create_circ_mask(h, w, center=None, radius=None):
@@ -535,14 +538,15 @@ def measure_waffle_center_and_angle(
         waffle_im, 
         psf_pixelscale_lamD, 
         im_thresh=1e-4, 
-        r_thresh=12,
+        r_thresh_min=12,
+        r_thresh_max=18, 
         verbose=True, 
         plot=True,
     ):
     npsf = waffle_im.shape[0]
     y,x = (xp.indices((npsf, npsf)) - npsf//2)*psf_pixelscale_lamD
     r = xp.sqrt(x**2 + y**2)
-    waffle_mask = (waffle_im > im_thresh) * (r>r_thresh)
+    waffle_mask = (waffle_im > im_thresh) * (r>r_thresh_min) * (r<r_thresh_max)
 
     centroids = []
     for i in [0,1]:

@@ -113,8 +113,8 @@ def set_camnsv_roi(xc, vcropoffset, client, delay=0.25):
 def get_im_params(client0, client, cam_name='camsci'):
     client0.wait_for_properties([f'{cam_name}.exptime', f'{cam_name}.emgain', ])
     exp_time = client[f'{cam_name}.exptime.target']
-    gain = client[f'{cam_name}.emgain.current']
-    fib_atten = client['fiberatten.atten.current']
+    gain = client[f'{cam_name}.emgain.target']
+    fib_atten = client['fiberatten.atten.target']
 
     im_params = {
         'texp':exp_time,
@@ -131,7 +131,7 @@ def normalize_image(image, im_params, ref_psf_params):
     return image_ni
 
 def snap(cam_stream, NFRAMES=1, dark=0, im_params=None, ref_psf_params=None):
-    im = np.mean(cam_stream.grab_many(NFRAMES), axis=0) - dark
+    im = np.mean( cam_stream.grab_many(NFRAMES), axis=0) - dark
     if im_params is not None and ref_psf_params is not None: 
         im = normalize_image(im, im_params, ref_psf_params)
     return im

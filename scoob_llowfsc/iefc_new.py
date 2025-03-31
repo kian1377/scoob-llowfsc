@@ -166,7 +166,6 @@ def run(iefc_data,
         vmin=1e-9,
     ):
     
-    print('Running iEFC...')
     start = time.time()
     starting_itr = len(iefc_data['images'])
 
@@ -176,7 +175,7 @@ def run(iefc_data,
     total_command = copy.copy(iefc_data['commands'][-1]) if len(iefc_data['commands'])>0 else np.zeros((Nact,Nact))
 
     for i in range(num_iterations):
-        print(f"\tRunning iteration {i+starting_itr} / {num_iterations+starting_itr-1}")
+        print(f"Running iteration {i+starting_itr} / {num_iterations+starting_itr-1}")
         diff_ims = take_measurement(
             camsci_stream, 
             dm_stream, 
@@ -196,6 +195,7 @@ def run(iefc_data,
         dm_stream.write( total_command * 1e6 )
         time.sleep(delay)
 
+        print(f"Measuring dark hole state ...")
         image_ni = scoobi.snap(camsci_stream, NFRAMES, dark_frame, im_params, ref_psf_params)
         contrast = np.mean(image_ni[control_mask])
 
@@ -216,7 +216,7 @@ def run(iefc_data,
                 norms=[CenteredNorm(), None, LogNorm(vmin=vmin)],
             )
 
-    print(f'Completed {num_iterations:d} in {time.time()-start:.3f}s.')
+    print(f'Completed {num_iterations:d} iterations in {time.time()-start:.3f}s.')
     return iefc_data
 
 def compute_hadamard_scale_factors(had_modes, scale_exp=1/6, scale_thresh=4, iwa=2.5, owa=13, oversamp=4, plot=False):

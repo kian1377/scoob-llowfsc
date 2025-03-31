@@ -100,7 +100,6 @@ def imshow(
     if Nrows==1 and Ncols is None:
         Ncols = Nax
     fig, axs = plt.subplots(nrows=Nrows, ncols=Ncols, figsize=figsize, dpi=dpi)
-    print(np.ndim(axs))
 
     row_ind = 0
     col_ind = 0
@@ -557,9 +556,7 @@ def measure_waffle_center_and_angle(
             cent[0] += i*npsf//2
             cent[1] += j*npsf//2
             centroids.append(cent)
-            # print(cent)
-            # imshow3(mask, arr, mask*arr, lognorm2=True,
-            #         patches1=[Circle(cent, 1, fill=True, color='cyan')])
+
     centroids.append(centroids[0])
     centroids = np.array(centroids)
     centroids[[2,3]] = centroids[[3,2]]

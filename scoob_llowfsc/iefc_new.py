@@ -107,7 +107,7 @@ def calibrate(
             calib_amps.append(amp)
             response += s * diff_ims.reshape(Nprobes, Ncamsci**2) / (2 * amp)
             
-            dm_stream.write( (current_command - s * calib_mode) * 1e6) # Remove the mode from the DMs
+            # dm_stream.write( (current_command - s * calib_mode) * 1e6) # Remove the mode from the DMs
         
         print(f"\tCalibrated mode {i+1:d}/{calibration_modes.shape[0]:d} in {time.time()-start:.3f}s", end='')
         print("\r", end="")
@@ -168,7 +168,7 @@ def run(iefc_data,
     Nact = probe_modes.shape[1]
     Nmodes = modal_matrix.shape[1]
 
-    total_command = copy.copy(iefc_data['commands'][-1]) if len(iefc_data['commands'])>0 else xp.zeros((Nact,Nact))
+    total_command = copy.copy(iefc_data['commands'][-1]) if len(iefc_data['commands'])>0 else np.zeros((Nact,Nact))
 
     for i in range(num_iterations):
         print(f"\tRunning iteration {i+starting_itr} / {num_iterations+starting_itr-1}")

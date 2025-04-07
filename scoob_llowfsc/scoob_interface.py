@@ -127,7 +127,7 @@ def normalize_image(image, im_params, ref_psf_params):
     image_ni = image / ref_psf_params['Iref']
     image_ni *= ref_psf_params['texp'] / im_params['texp']
     image_ni *= 10**( (im_params['atten'] - ref_psf_params['atten']) / 10)
-    image_ni *= 10**(-im_params['gain']/20 * 0.1) / 10**(-ref_psf_params['gain']/20 * 0.1)
+    image_ni *= 10**( -im_params['gain']/20 * 0.1) / 10**(-ref_psf_params['gain']/20 * 0.1)
     return image_ni
 
 def snap(cam_stream, NFRAMES=1, dark=0, im_params=None, ref_psf_params=None):

@@ -146,7 +146,7 @@ def create_fourier_probes(
 
     return probes
 
-def make_f(h=10, w=6, shift=(0,0), Nact=34):
+def make_f(h=10, w=6, shift=(-1,0), Nact=34):
     f_command = xp.zeros((Nact, Nact))
 
     top_row = Nact//2 + h//2 + shift[1]

@@ -81,6 +81,6 @@ def read_telem_data(data_fnames, absolute=False):
         start_time = data_times[0]
         data_times = data_times - start_time
 
-    return data, data_times 
+    return data, data_times
 
     

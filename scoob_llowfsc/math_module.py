@@ -1,5 +1,9 @@
 import numpy as np
 import scipy
+import logging
+import logging
+
+_log = logging.getLogger('scoob_llowfsc')
 
 try:
     import cupy
@@ -61,10 +65,13 @@ def update_scipy(module):
     xcipy._srcmodule = module
         
 def ensure_np_array(arr):
+    """
+    if a cupy array 
+    """
     if isinstance(arr, np.ndarray):
         return arr
     elif cupy_avail and isinstance(arr, cupy.ndarray):
         return arr.get()
-    
-
-    
+    else:
+        _log.debug("arr not np or cupy ndarray, returning unchanged.")
+        return arr

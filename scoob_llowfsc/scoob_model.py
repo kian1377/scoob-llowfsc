@@ -19,10 +19,11 @@ class single():
     def __init__(
             self,
             wavelength=633e-9, 
-            dm_ref=xp.zeros((34,34)),
-            entrance_flux=None, 
+           
+            entrance_flux=None,
+            Nact=34,
         ):
-        
+
         self.wavelength_c = 633e-9
         self.total_pupil_diam = 2.4 # assumed total telescope diameter
         self.fsm_beam_diam = 7.1e-3
@@ -100,7 +101,7 @@ class single():
             self.APERTURE *= xp.sqrt(flux_per_pixel.to_value(u.photon/u.second))
 
         ### INITIALIZE DM PARAMETERS ###
-        self.Nact = 34
+        self.Nact = Nact
         self.dm_shape = (self.Nact, self.Nact)
         self.act_spacing = 300e-6
         self.dm_pxscl = self.dm_beam_diam / self.npix
@@ -131,8 +132,8 @@ class single():
         self.Mx_back = xp.exp(1j*2*np.pi*xp.outer(xc,fx)) # adjoint DM model MFT matrices
         self.My_back = xp.exp(1j*2*np.pi*xp.outer(fy,yc))
 
-        self.dm_ref = copy.copy(dm_ref)
-        self.dm_channels = xp.zeros((10,34,34))
+        self.dm_ref = copy.copy(xp.zeros((Nact,Nact)))
+        self.dm_channels = xp.zeros((10,Nact,Nact))
         self.dm_channels[0] = self.dm_ref
         self.dm_total = xp.sum(self.dm_channels, axis=0)
 
@@ -212,12 +213,12 @@ class single():
         return self.FSM_PTT
 
     def reset_dm(self):
-        self.dm_channels = xp.zeros((10,34,34))
+        self.dm_channels = xp.zeros((10,self.Nact,self.Nact))
         self.dm_channels[0] = self.dm_ref
         self.dm_total = xp.sum(self.dm_channels, axis=0)
 
     def zero_dm(self, channel=1):
-        self.dm_channels[channel] = xp.zeros((34,34))
+        self.dm_channels[channel] = xp.zeros((self.Nact,self.Nact))
         self.dm_total = xp.sum(self.dm_channels, axis=0)
 
     def set_dm(self, command, channel=1):

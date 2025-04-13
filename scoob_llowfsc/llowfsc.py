@@ -188,5 +188,45 @@ def inject_wfe(
         print('Stopped injecting WFE.')
         wfe_stream.write(np.zeros(wfe_stream.shape))
 
+from magpyx.utils import ImageStream
+import purepyindi
+from purepyindi import INDIClient
+import purepyindi2
+from purepyindi2 import IndiClient
 
+
+def set_kilo_mod_amp(amp, client, process_name='kiloModulator', delay=0.25):
+    client.wait_for_properties([f'{process_name}.amp'])
+    client[f'{process_name}.amp.target'] = amp
+    time.sleep(delay)
+
+def set_kilo_mod_rate(freq, client, process_name='kiloModulator', delay=0.25):
+    client.wait_for_properties([f'{process_name}.frequency'])
+    client[f'{process_name}.frequency.target'] = freq
+    time.sleep(delay)
+
+import subprocess
+def start_kiloModulator(delay=0.5):
+    subprocess.run(['xctrl', 'start', 'kiloModulator'])
+    time.sleep(delay)
+
+def stop_kiloModulator(delay=0.5):
+    subprocess.run(['xctrl', 'stop', 'kiloModulator'])
+    time.sleep(delay)
+
+def toggle_kilo_mod(toggle, client, process_name='kiloModulator', delay=0.25):
+    if toggle:
+        client.wait_for_properties([f'{process_name}.trigger', f'{process_name}.modulating'])
+        client[f'{process_name}.trigger.toggle'] = purepyindi.SwitchState.OFF
+        time.sleep(delay)
+        client[f'{process_name}.modulating.toggle'] = purepyindi.SwitchState.ON
+        time.sleep(delay)
+    else:
+        client.wait_for_properties([f'{process_name}.trigger', f'{process_name}.modulating', f'{process_name}.zero'])
+        client[f'{process_name}.modulating.toggle'] = purepyindi.SwitchState.OFF
+        time.sleep(delay)
+        client[f'{process_name}.trigger.toggle'] = purepyindi.SwitchState.ON
+        time.sleep(delay)
+        client[f'{process_name}.zero.request'] = purepyindi.SwitchState.ON
+        time.sleep(delay)
 

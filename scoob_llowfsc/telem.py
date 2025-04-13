@@ -6,6 +6,7 @@ import glob
 from pathlib import Path
 import os
 import shutil
+import time
 
 import magpyx
 from magpyx.utils import ImageStream
@@ -20,8 +21,9 @@ dm01_path = Path('/opt/MagAOX/rawimages/dm00disp01/')
 dm02_path = Path('/opt/MagAOX/rawimages/dm00disp02/')
 dm03_path = Path('/opt/MagAOX/rawimages/dm00disp03/')
 
-def toggle(on, channel, client):
+def toggle(on, channel, client, delay=None):
     client.wait_for_properties([f'telem_{channel}.writing'])
+    if delay is not None: time.sleep(delay)
     if on:
         client[f'telem_{channel}.writing.toggle'] = purepyindi.SwitchState.ON
     else:

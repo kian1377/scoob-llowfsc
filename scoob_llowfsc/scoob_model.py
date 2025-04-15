@@ -21,15 +21,15 @@ class single():
             wavelength=633e-9, 
             entrance_flux=None,
             Nact=34,
-                self.wavelength_c = 633e-9
-        total_pupil_diam = 2.4 # assumed total telescope diameter
-        fsm_beam_diam = 7.1e-3
-        dm_beam_diam = 9.1e-3 # as measured in the Fresnel model
-        lyot_pupil_diam = 9.1e-3
-        lyot_diam = 8.6e-3
-        rls_diam = 25.4e-3
-        d_oap_ls = 150e-3
-        act_spacing = 300e-6
+            wavelength_c = 633e-9,
+            total_pupil_diam = 2.4, # assumed total telescope diameter
+            fsm_beam_diam = 7.1e-3,
+            dm_beam_diam = 9.1e-3, # as measured in the Fresnel model
+            lyot_pupil_diam = 9.1e-3,
+            lyot_diam = 8.6e-3,
+            rls_diam = 25.4e-3,
+            d_oap_ls = 150e-3,
+            act_spacing = 300e-6,
 
         ):
 

@@ -19,20 +19,30 @@ class single():
     def __init__(
             self,
             wavelength=633e-9, 
-           
             entrance_flux=None,
             Nact=34,
+                self.wavelength_c = 633e-9
+        total_pupil_diam = 2.4 # assumed total telescope diameter
+        fsm_beam_diam = 7.1e-3
+        dm_beam_diam = 9.1e-3 # as measured in the Fresnel model
+        lyot_pupil_diam = 9.1e-3
+        lyot_diam = 8.6e-3
+        rls_diam = 25.4e-3
+        d_oap_ls = 150e-3
+        act_spacing = 300e-6
+
         ):
 
-        self.wavelength_c = 633e-9
-        self.total_pupil_diam = 2.4 # assumed total telescope diameter
-        self.fsm_beam_diam = 7.1e-3
-        self.dm_beam_diam = 9.1e-3 # as measured in the Fresnel model
-        self.lyot_pupil_diam = 9.1e-3
-        self.lyot_diam = 8.6e-3
+        self.wavelength_c = wavelength_c
+        self.total_pupil_diam = total_pupil_diam
+        self.fsm_beam_diam = fsm_beam_diam
+        self.dm_beam_diam = dm_beam_diam
+        self.lyot_pupil_diam = lyot_pupil_diam
+        self.lyot_diam =lyot_diam
         self.lyot_ratio = self.lyot_diam/self.lyot_pupil_diam
-        self.rls_diam = 25.4e-3
-        self.d_oap_ls = 150e-3
+        self.rls_diam =rls_diam
+        self.act_spacing = act_spacing
+        self.d_oap_ls = d_oap_ls
         self.imaging_fl = 140e-3
         self.llowfsc_fl = 200e-3
         self.llowfsc_fnum = self.llowfsc_fl/self.lyot_diam
@@ -103,7 +113,6 @@ class single():
         ### INITIALIZE DM PARAMETERS ###
         self.Nact = Nact
         self.dm_shape = (self.Nact, self.Nact)
-        self.act_spacing = 300e-6
         self.dm_pxscl = self.dm_beam_diam / self.npix
         self.inf_sampling = self.act_spacing / self.dm_pxscl
         self.inf_fun = dm.make_gaussian_inf_fun(
@@ -214,7 +223,7 @@ class single():
 
     def reset_dm(self):
         self.dm_channels = xp.zeros((10,self.Nact,self.Nact))
-        self.dm_channels[0] = self.dm_ref
+        self.dm_channels[0] = xp.asarray(self.dm_ref)
         self.dm_total = xp.sum(self.dm_channels, axis=0)
 
     def zero_dm(self, channel=1):

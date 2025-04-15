@@ -149,6 +149,41 @@ def add_dm(dm_stream, dm_command, delay=0.01):
     dm_stream.write( current_command + 1e6*ensure_np_array(dm_command) )
     time.sleep(delay)
 
+def set_kilo_mod_amp(amp, client, process_name='kiloModulator', delay=0.25):
+    client.wait_for_properties([f'{process_name}.amp'])
+    client[f'{process_name}.amp.target'] = amp
+    time.sleep(delay)
+
+def set_kilo_mod_rate(freq, client, process_name='kiloModulator', delay=0.25):
+    client.wait_for_properties([f'{process_name}.frequency'])
+    client[f'{process_name}.frequency.target'] = freq
+    time.sleep(delay)
+
+import subprocess
+def start_kiloModulator(delay=0.5):
+    subprocess.run(['xctrl', 'start', 'kiloModulator'])
+    time.sleep(delay)
+
+def stop_kiloModulator(delay=0.5):
+    subprocess.run(['xctrl', 'stop', 'kiloModulator'])
+    time.sleep(delay)
+
+def toggle_kilo_mod(toggle, client, process_name='kiloModulator', delay=0.25):
+    if toggle:
+        client.wait_for_properties([f'{process_name}.trigger', f'{process_name}.modulating'])
+        client[f'{process_name}.trigger.toggle'] = purepyindi.SwitchState.OFF
+        time.sleep(delay)
+        client[f'{process_name}.modulating.toggle'] = purepyindi.SwitchState.ON
+        time.sleep(delay)
+    else:
+        client.wait_for_properties([f'{process_name}.trigger', f'{process_name}.modulating', f'{process_name}.zero'])
+        client[f'{process_name}.modulating.toggle'] = purepyindi.SwitchState.OFF
+        time.sleep(delay)
+        client[f'{process_name}.trigger.toggle'] = purepyindi.SwitchState.ON
+        time.sleep(delay)
+        client[f'{process_name}.zero.request'] = purepyindi.SwitchState.ON
+        time.sleep(delay)
+
 class SCOOBI():
     def __init__(
             self, 

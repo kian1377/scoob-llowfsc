@@ -66,6 +66,22 @@ def unpack_data(telem_path, data_path):
 
 from astropy.io import fits
 
+def read_telem_times(data_fnames, absolute=False):
+    data_times = []
+    for fname in data_fnames:
+        t_hr = float(fname.split("_")[-1][8:10])
+        t_min = float(fname.split("_")[-1][10:12])
+        t_sec = float(fname.split("_")[-1][12:-5])/1e9
+        data_times.append( 3600*t_hr + 60*t_min + t_sec )
+
+    data_times = np.array(data_times)
+
+    if not absolute: 
+        start_time = data_times[0]
+        data_times = data_times - start_time
+
+    return data_times
+
 def read_telem_data(data_fnames, absolute=False):
     data = []
     data_times = []

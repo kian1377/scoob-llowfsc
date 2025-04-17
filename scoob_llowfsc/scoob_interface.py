@@ -184,6 +184,44 @@ def toggle_kilo_mod(toggle, client, process_name='kiloModulator', delay=0.25):
         client[f'{process_name}.zero.request'] = purepyindi.SwitchState.ON
         time.sleep(delay)
 
+from matplotlib.colors import LogNorm
+
+def monitor_camsci(
+        camsci_stream, 
+        im_params,
+        ref_psf_params,
+        dark_frame,
+        control_mask, 
+        NFRAMES=10,
+        duration=60,
+        plot=False, 
+        clear=True, 
+        save_path=None,
+    ):
+    all_ims = []
+    try:
+        print('Streaming camsci data ...')
+        i = 0
+        start = time.time()
+        while (time.time()-start)<duration:
+            im = np.mean(camsci_stream.grab_many(NFRAMES), axis=0) - dark_frame
+            im_ni = normalize_image(im, im_params, ref_psf_params)
+            all_ims.append(im_ni)
+            i += 1
+            contrast = xp.mean(im_ni[control_mask])
+            print(f'Mean NI = {contrast:.2e}')
+            if plot:
+                utils.imshow([im_ni], norms=[LogNorm(1e-9)])
+            if clear:
+                clear_output(wait=True)
+    except KeyboardInterrupt:
+        print('Stopping camsci stream!')
+    if save_path is not None:
+        utils.save_fits(save_path, np.array(all_ims))
+
+    return np.array(all_ims)
+
+
 class SCOOBI():
     def __init__(
             self, 

@@ -58,6 +58,8 @@ def imshow(
         cmaps=[],
         norms=[],
         cbar_labels=[],
+        cbar_label_rots=[],
+        cbar_label_pads=[],
         grids=[],
         xticks=[],
         yticks=[], 
@@ -80,6 +82,8 @@ def imshow(
     cmaps.extend(['magma'] * (Nax - len(cmaps)))
     norms.extend([None] * (Nax - len(norms)))
     cbar_labels.extend([None] * (Nax - len(cbar_labels)))
+    cbar_label_rots.extend([0] * (Nax - len(cbar_label_rots)))
+    cbar_label_pads.extend([7] * (Nax - len(cbar_label_pads)))
     grids.extend([None] * (Nax - len(grids)))
     xticks.extend([None] * (Nax - len(xticks)))
     yticks.extend([None] * (Nax - len(yticks)))
@@ -113,6 +117,8 @@ def imshow(
         cmap = cmaps[i]
         norm = norms[i]
         cbar_label = cbar_labels[i]
+        cbar_label_rot = cbar_label_rots[i]
+        cbar_label_pad = cbar_label_pads[i]
         xtick = xticks[i]
         ytick = yticks[i]
         pxscl = pxscls[i]
@@ -149,7 +155,7 @@ def imshow(
         divider = make_axes_locatable(ax)
         cax = divider.append_axes("right", size="4%", pad=0.075)
         cbar = fig.colorbar(im, cax=cax)
-        cbar.ax.set_ylabel(cbar_label, rotation=0, labelpad=7)
+        cbar.ax.set_ylabel(cbar_label, rotation=cbar_label_rot, labelpad=cbar_label_pad)
     
     plt.subplots_adjust(wspace=wspace, hspace=hspace)
     plt.close()

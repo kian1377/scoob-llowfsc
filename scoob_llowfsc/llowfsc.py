@@ -212,5 +212,37 @@ def inject_wfe_cube(
         print('Stopped injecting WFE.')
         wfe_stream.write(np.zeros(wfe_stream.shape))
 
-        
+import matplotlib.pyplot as plt
+from matplotlib.gridspec import GridSpec
+from matplotlib.colors import LogNorm
+
+def plot_responses(
+        dm_modes, 
+        response_cube, 
+        figsize=(25,5),
+        dpi=125,
+        hspace=0.0,
+        wspace=-0.05,
+        title=None,
+        title_fs=14,
+    ):
+    fig = plt.figure(figsize=figsize, dpi=dpi)
+    gs = GridSpec(2, 10, figure=fig)
+    fig.suptitle(title, fontsize=title_fs)
+
+    for i in range(10):
+        mode = ensure_np_array(dm_modes[i])
+        response = ensure_np_array(response_cube[i])
+
+        ax = fig.add_subplot(gs[0, i])
+        ax.imshow(mode, cmap='viridis')
+        ax.set_xticks([])
+        ax.set_yticks([])
+
+        ax = fig.add_subplot(gs[1, i])
+        ax.imshow(response, cmap='magma',)
+        ax.set_xticks([])
+        ax.set_yticks([])
+
+    plt.subplots_adjust(hspace=hspace, wspace=wspace)      
 

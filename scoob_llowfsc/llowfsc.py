@@ -225,6 +225,7 @@ def plot_responses(
         wspace=-0.05,
         title=None,
         title_fs=14,
+        fname=None,
     ):
     fig = plt.figure(figsize=figsize, dpi=dpi)
     gs = GridSpec(2, 10, figure=fig)
@@ -244,5 +245,5 @@ def plot_responses(
         ax.set_xticks([])
         ax.set_yticks([])
 
-    plt.subplots_adjust(hspace=hspace, wspace=wspace)      
-
+    plt.subplots_adjust(hspace=hspace, wspace=wspace)    
+    if fname is not None: fig.savefig(fname, format='pdf', bbox_inches="tight")

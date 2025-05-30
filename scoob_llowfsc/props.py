@@ -16,7 +16,6 @@ def fft(arr):
 def ifft(arr):
     return xp.fft.fftshift(xp.fft.ifft2(xp.fft.ifftshift(arr)))
 
-
 def ang_spec(wavefront, wavelength, distance, pixelscale):
     n = wavefront.shape[0]
 
@@ -36,7 +35,15 @@ def ang_spec(wavefront, wavelength, distance, pixelscale):
 
     return prop_wf
 
-def mft_forward(wavefront, npix, npsf, psf_pixelscale_lamD, convention='-', pp_centering='even', fp_centering='odd'):
+def mft_forward(
+        wavefront, 
+        npix, 
+        npsf, 
+        psf_pixelscale_lamD, 
+        convention='-', 
+        pp_centering='even', 
+        fp_centering='odd',
+    ):
     N = wavefront.shape[0]
     dx = 1.0 / npix
     if pp_centering=='even':
@@ -64,7 +71,15 @@ def mft_forward(wavefront, npix, npsf, psf_pixelscale_lamD, convention='-', pp_c
 
     return Mx@wavefront@My * norm_coeff
 
-def mft_reverse(fpwf, psf_pixelscale_lamD, npix, N, convention='+', pp_centering='even', fp_centering='odd'):
+def mft_reverse(
+        fpwf, 
+        psf_pixelscale_lamD, 
+        npix, 
+        N, 
+        convention='+', 
+        pp_centering='even', 
+        fp_centering='odd',
+    ):
     npsf = fpwf.shape[0]
     du = psf_pixelscale_lamD
     if fp_centering=='odd':
